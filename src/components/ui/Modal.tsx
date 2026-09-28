@@ -33,7 +33,7 @@ export function Modal({ open, onClose, title, description, children, footer, siz
   return createPortal(
     <div className="fixed inset-0 z-50 flex items-end justify-center sm:items-center sm:p-6">
       <div className="absolute inset-0 animate-fade-in bg-slate-900/40 backdrop-blur-[2px]" onClick={onClose} />
-      <div role="dialog" aria-modal="true" className={cn('relative flex max-h-[92dvh] w-full animate-slide-up flex-col rounded-t-2xl bg-white shadow-pop sm:rounded-2xl', w)}>
+      <div role="dialog" aria-modal="true" className={cn('relative flex max-h-[92dvh] w-full animate-slide-up flex-col rounded-t-3xl bg-white shadow-pop sm:rounded-3xl', w)}>
         {(title || !hideClose) && (
           <div className="flex items-start justify-between gap-4 border-b border-slate-100 px-5 py-4 sm:px-6">
             <div className="min-w-0">
@@ -41,7 +41,7 @@ export function Modal({ open, onClose, title, description, children, footer, siz
               {description && <p className="mt-0.5 text-[13px] text-slate-500">{description}</p>}
             </div>
             {!hideClose && (
-              <button onClick={onClose} className="-mt-1 -mr-2 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Close">
+              <button onClick={onClose} className="-mt-1 -mr-2 rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Close">
                 <X size={18} />
               </button>
             )}
@@ -77,7 +77,7 @@ export function Drawer({ open, onClose, title, description, children, footer, wi
               {title && <h2 className="text-base font-semibold text-slate-900">{title}</h2>}
               {description && <div className="mt-0.5 text-[13px] text-slate-500">{description}</div>}
             </div>
-            <button onClick={onClose} className="-mt-1 -mr-2 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Close">
+            <button onClick={onClose} className="-mt-1 -mr-2 rounded-full p-1.5 text-slate-400 hover:bg-slate-100 hover:text-slate-700" aria-label="Close">
               <X size={18} />
             </button>
           </div>

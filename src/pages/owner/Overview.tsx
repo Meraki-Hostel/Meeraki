@@ -23,7 +23,7 @@ export default function OwnerOverview() {
   return (
     <div className="space-y-6">
       <div>
-        <span className="text-[13px] font-medium text-slate-500">{formatDateLong(DEMO_TODAY)}</span>
+        <span className="text-[13px] font-medium text-slate-500 lg:hidden">{formatDateLong(DEMO_TODAY)}</span>
         <h1 className="text-2xl font-semibold tracking-tight text-slate-900">{greeting()}, {firstName(OWNER_NAME)}</h1>
         <p className="text-sm text-slate-500">Portfolio overview · {data.properties.length} properties · September 2026</p>
       </div>

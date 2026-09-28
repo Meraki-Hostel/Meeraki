@@ -82,7 +82,7 @@ export default function ManagerDashboard() {
       })}
 
       <div className="flex flex-col gap-1">
-        <span className="text-[13px] font-medium text-slate-500">
+        <span className="text-[13px] font-medium text-slate-500 lg:hidden">
           {weekday(DEMO_TODAY)}, {formatDateLong(DEMO_TODAY)}
         </span>
         <h1 className="text-2xl font-semibold tracking-tight text-slate-900">

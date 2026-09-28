@@ -1,11 +1,12 @@
 import { useEffect, useLayoutEffect, useRef, useState } from 'react'
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom'
-import { Bell, Building2, Check, ChevronsUpDown, FlaskConical, Menu as MenuIcon, MoreHorizontal, RotateCcw, Search, Siren, X } from 'lucide-react'
+import { Bell, Building2, Check, ChevronDown, CircleHelp, FlaskConical, Gem, LogOut, Menu as MenuIcon, MoreHorizontal, Plus, RotateCcw, Search, Settings, Siren, X } from 'lucide-react'
 import { OWNER_NAME, useStore } from '../../store/AppStore'
 import type { Role } from '../../lib/types'
-import { cn, timeAgo } from '../../lib/utils'
+import { cn, formatDateLong, timeAgo, todayStart, weekday } from '../../lib/utils'
 import { locationOf } from '../../store/selectors'
-import { Avatar, PageSkeleton, Select, useConfirm, useToast } from '../ui'
+import { Avatar, Button, PageSkeleton, Select, useConfirm, useToast } from '../ui'
+import { useModals } from '../domain/ModalsProvider'
 import { NAV, STUDENT_TABS, type NavGroup } from './nav'
 import { buildNotifications } from './notifications'
 import { CommandSearch } from './CommandSearch'
@@ -17,6 +18,7 @@ export function AppShell({ role }: { role: Role }) {
   const [searchOpen, setSearchOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const first = useRef(true)
+  const mainRef = useRef<HTMLElement>(null)
 
   useEffect(() => {
     if (session.role !== role) setRole(role)
@@ -26,6 +28,7 @@ export function AppShell({ role }: { role: Role }) {
   useLayoutEffect(() => {
     setMobileNav(false)
     window.scrollTo(0, 0)
+    mainRef.current?.scrollTo(0, 0)
     if (first.current) {
       first.current = false
       return
@@ -48,30 +51,34 @@ export function AppShell({ role }: { role: Role }) {
   }, [role])
 
   return (
-    <div className="min-h-dvh">
-      {/* Desktop sidebar */}
-      <aside className="fixed inset-y-0 left-0 z-30 hidden w-64 flex-col border-r border-slate-200/80 bg-white lg:flex">
-        <SidebarContent role={role} />
-      </aside>
+    <div className="min-h-dvh lg:h-dvh lg:p-4 xl:p-6">
+      {/* Floating app frame on desktop; full-bleed on mobile */}
+      <div className="mx-auto lg:flex lg:h-full lg:max-w-[1680px] lg:overflow-hidden lg:rounded-frame lg:bg-white lg:shadow-frame lg:ring-1 lg:ring-slate-200/60">
+        <aside className="hidden w-[260px] shrink-0 flex-col border-r border-slate-100 lg:flex">
+          <SidebarContent role={role} />
+        </aside>
 
-      {/* Mobile drawer */}
-      {mobileNav && (
-        <div className="fixed inset-0 z-50 lg:hidden">
-          <div className="absolute inset-0 animate-fade-in bg-slate-900/40" onClick={() => setMobileNav(false)} />
-          <aside className="relative flex h-full w-72 max-w-[85vw] animate-slide-in-left flex-col bg-white shadow-pop">
-            <button onClick={() => setMobileNav(false)} className="absolute top-4 right-3 rounded-lg p-1.5 text-slate-400 hover:bg-slate-100" aria-label="Close menu">
-              <X size={18} />
-            </button>
-            <SidebarContent role={role} />
-          </aside>
+        {/* Mobile drawer */}
+        {mobileNav && (
+          <div className="fixed inset-0 z-50 lg:hidden">
+            <div className="absolute inset-0 animate-fade-in bg-slate-900/40" onClick={() => setMobileNav(false)} />
+            <aside className="relative flex h-full w-72 max-w-[85vw] animate-slide-in-left flex-col rounded-r-frame bg-white shadow-pop">
+              <button onClick={() => setMobileNav(false)} className="absolute top-5 right-3 rounded-full p-1.5 text-slate-400 hover:bg-slate-100" aria-label="Close menu">
+                <X size={18} />
+              </button>
+              <SidebarContent role={role} />
+            </aside>
+          </div>
+        )}
+
+        <div className="flex min-w-0 flex-1 flex-col">
+          <Topbar role={role} onMenu={() => setMobileNav(true)} onSearch={() => setSearchOpen(true)} />
+          <main ref={mainRef} className="scrollbar-thin lg:min-h-0 lg:flex-1 lg:overflow-y-auto">
+            <div className={cn('mx-auto w-full max-w-[1400px] px-4 pt-5 pb-10 sm:px-6 lg:px-8 lg:pt-2', role === 'student' && 'max-w-5xl pb-28 lg:pb-10')}>
+              {loading ? <PageSkeleton /> : <div key={location.pathname} className="animate-fade-in"><Outlet /></div>}
+            </div>
+          </main>
         </div>
-      )}
-
-      <div className="lg:pl-64">
-        <Topbar role={role} onMenu={() => setMobileNav(true)} onSearch={() => setSearchOpen(true)} />
-        <main className={cn('mx-auto w-full max-w-[1400px] px-4 pt-5 pb-10 sm:px-6 lg:px-8 lg:pt-7', role === 'student' && 'max-w-5xl pb-28 lg:pb-10')}>
-          {loading ? <PageSkeleton /> : <div key={location.pathname} className="animate-fade-in"><Outlet /></div>}
-        </main>
       </div>
 
       {role === 'student' && <StudentTabBar onMore={() => setMobileNav(true)} />}
@@ -83,31 +90,37 @@ export function AppShell({ role }: { role: Role }) {
 function Logo() {
   return (
     <div className="flex items-center gap-2.5">
-      <div className="flex size-8 items-center justify-center rounded-lg bg-brand-700 text-white">
+      <div className="flex size-9 items-center justify-center rounded-xl bg-ink text-white">
         <svg viewBox="0 0 32 32" className="size-5" fill="currentColor"><path d="M6 24V12.5l10-5.5 10 5.5V24h-6.5v-7h-7v7z" /></svg>
       </div>
       <div className="leading-tight">
-        <div className="text-[15px] font-semibold tracking-tight text-slate-900">Meraki</div>
+        <div className="text-[17px] font-semibold tracking-tight text-slate-900">Meraki</div>
         <div className="text-[11px] text-slate-400">Hostel OS</div>
       </div>
     </div>
   )
 }
 
+const navItemCls = 'group flex h-10 items-center gap-3 rounded-xl px-3 text-[14px] transition-colors'
+
 function SidebarContent({ role }: { role: Role }) {
   const { data, session } = useStore()
+  const toast = useToast()
   const groups: NavGroup[] = NAV[role]
   const ctx = { propertyId: session.managerPropertyId, studentId: session.studentId }
   const student = data.students.find((s) => s.id === session.studentId)
   const property = data.properties.find((p) => p.id === (role === 'student' ? student?.propertyId : session.managerPropertyId))
+  const settingsTo = role === 'student' ? '/student/profile' : null
   return (
     <>
-      <div className="flex h-16 shrink-0 items-center px-5">
+      <div className="flex h-20 shrink-0 items-center px-6">
         <Logo />
       </div>
       {role !== 'owner' && property && (
-        <div className="mx-3 mb-2 flex items-center gap-2.5 rounded-xl border border-slate-200 bg-slate-50/70 px-3 py-2.5">
-          <Building2 size={16} className="shrink-0 text-slate-400" />
+        <div className="mx-4 mb-3 flex items-center gap-2.5 rounded-2xl bg-slate-50 px-3 py-2.5">
+          <span className="flex size-8 shrink-0 items-center justify-center rounded-full bg-white text-slate-500 ring-1 ring-slate-200/70">
+            <Building2 size={15} />
+          </span>
           <div className="min-w-0">
             <div className="truncate text-[13px] font-semibold text-slate-800">{property.name}</div>
             <div className="truncate text-[11px] text-slate-500">
@@ -116,10 +129,12 @@ function SidebarContent({ role }: { role: Role }) {
           </div>
         </div>
       )}
-      <nav className="scrollbar-thin flex-1 overflow-y-auto px-3 pt-1 pb-4">
+      <nav className="scrollbar-thin flex-1 overflow-y-auto px-4 pt-2 pb-4">
         {groups.map((g, gi) => (
           <div key={gi} className={cn(gi > 0 && 'mt-5')}>
-            {g.label && <div className="mb-1.5 px-2.5 text-[11px] font-semibold tracking-wider text-slate-400 uppercase">{g.label}</div>}
+            {(g.label ?? (gi === 0 ? 'Main Menu' : null)) && (
+              <div className={cn('mb-2 px-3 text-[12.5px] font-semibold', gi === 0 ? 'text-slate-900' : 'text-slate-400')}>{g.label ?? 'Main Menu'}</div>
+            )}
             <div className="space-y-0.5">
               {g.items.map((it) => {
                 const n = it.badge?.(data, ctx) ?? 0
@@ -130,18 +145,18 @@ function SidebarContent({ role }: { role: Role }) {
                     end={it.end}
                     className={({ isActive }) =>
                       cn(
-                        'group flex h-9 items-center gap-2.5 rounded-lg px-2.5 text-[13.5px] font-medium transition-colors',
+                        navItemCls,
                         it.tone === 'danger'
-                          ? isActive ? 'bg-rose-50 text-rose-700' : 'text-rose-600 hover:bg-rose-50'
-                          : isActive ? 'bg-brand-50 text-brand-800' : 'text-slate-600 hover:bg-slate-100 hover:text-slate-900',
+                          ? isActive ? 'bg-rose-50 font-semibold text-rose-700' : 'font-medium text-rose-600 hover:bg-rose-50'
+                          : isActive ? 'bg-slate-100/80 font-semibold text-ink' : 'text-slate-500 hover:bg-slate-50 hover:text-slate-900',
                       )
                     }
                   >
                     {({ isActive }) => (
                       <>
-                        <it.icon size={17} strokeWidth={isActive ? 2.2 : 1.9} className={cn(it.tone !== 'danger' && (isActive ? 'text-brand-600' : 'text-slate-400 group-hover:text-slate-600'))} />
+                        <it.icon size={19} strokeWidth={isActive ? 2.1 : 1.7} className={cn(it.tone !== 'danger' && (isActive ? 'text-ink' : 'text-slate-400 group-hover:text-slate-700'))} />
                         <span className="flex-1 truncate">{it.label}</span>
-                        {n > 0 && <span className={cn('rounded-full px-1.5 text-[11px] font-semibold tabular', isActive ? 'bg-brand-100 text-brand-700' : 'bg-slate-100 text-slate-500')}>{n}</span>}
+                        {n > 0 && <span className={cn('rounded-full px-1.5 text-[11px] font-semibold tabular', isActive ? 'bg-ink text-white' : 'bg-slate-100 text-slate-500')}>{n}</span>}
                       </>
                     )}
                   </NavLink>
@@ -150,10 +165,25 @@ function SidebarContent({ role }: { role: Role }) {
             </div>
           </div>
         ))}
+        <QuickActionCard role={role} />
       </nav>
-      <div className="border-t border-slate-100 p-3">
-        <div className="flex items-center gap-2 rounded-lg bg-amber-50 px-3 py-2 text-[11.5px] text-amber-800">
-          <FlaskConical size={14} className="shrink-0" />
+      <div className="space-y-0.5 border-t border-slate-100 px-4 py-3">
+        <button onClick={() => toast.info('Help Center', { description: 'Reach the Meraki team at support@meraki.app — this is a prototype, so no ticket is created.' })} className={cn(navItemCls, 'w-full text-slate-500 hover:bg-slate-50 hover:text-slate-900')}>
+          <CircleHelp size={19} strokeWidth={1.7} className="text-slate-400" />
+          Help Center
+        </button>
+        {settingsTo && (
+          <NavLink to={settingsTo} className={cn(navItemCls, 'text-slate-500 hover:bg-slate-50 hover:text-slate-900')}>
+            <Settings size={19} strokeWidth={1.7} className="text-slate-400" />
+            Settings
+          </NavLink>
+        )}
+        <button onClick={() => toast.info('Sign-in isn’t built yet', { description: 'Use the profile menu at the top right to switch between demo roles.' })} className={cn(navItemCls, 'w-full text-slate-500 hover:bg-slate-50 hover:text-slate-900')}>
+          <LogOut size={19} strokeWidth={1.7} className="text-slate-400" />
+          Sign Out
+        </button>
+        <div className="flex items-center gap-1.5 px-3 pt-2 text-[11px] text-slate-400">
+          <FlaskConical size={12} className="shrink-0" />
           Prototype — all data is simulated
         </div>
       </div>
@@ -161,28 +191,70 @@ function SidebarContent({ role }: { role: Role }) {
   )
 }
 
+function QuickActionCard({ role }: { role: Role }) {
+  const { data, session } = useStore()
+  const modals = useModals()
+  const navigate = useNavigate()
+  const student = data.students.find((s) => s.id === session.studentId)
+  const propertyId = role === 'student' ? student?.propertyId : session.managerPropertyId
+  const faces =
+    role === 'owner'
+      ? data.properties.slice(0, 3).map((p) => p.managerName)
+      : data.students.filter((s) => s.propertyId === propertyId && s.status === 'active' && s.id !== session.studentId).slice(0, 3).map((s) => s.name)
+  const cfg =
+    role === 'manager'
+      ? { title: 'Quick add new students', cta: 'Add Student', icon: Plus, onClick: () => modals.open({ type: 'addStudent' }) }
+      : role === 'owner'
+        ? { title: 'Grow your portfolio with Meraki Pro', cta: 'View plans', icon: Gem, onClick: () => navigate('/owner/plans') }
+        : { title: 'Something not working in your room?', cta: 'Raise complaint', icon: Plus, onClick: () => student && modals.open({ type: 'complaint', studentId: student.id, studentMode: true }) }
+  return (
+    <div className="mt-6 rounded-3xl border border-slate-100 bg-gradient-to-b from-slate-50 to-white px-4 pt-5 pb-4 text-center">
+      <div className="flex justify-center -space-x-2">
+        {faces.map((n, i) => (
+          <Avatar key={n} name={n} size={i === 1 ? 'md' : 'sm'} className={cn('ring-2 ring-white', i === 1 && 'z-10 -mt-1')} />
+        ))}
+      </div>
+      <p className="mx-auto mt-3 max-w-[11rem] text-[14px] leading-snug font-medium text-slate-900">{cfg.title}</p>
+      <Button variant="primary" size="sm" icon={cfg.icon} onClick={cfg.onClick} className="mt-3.5">
+        {cfg.cta}
+      </Button>
+    </div>
+  )
+}
+
+function pageTitle(role: Role, path: string) {
+  const items = NAV[role].flatMap((g) => g.items.map((it) => ({ ...it, group: g.label })))
+  const hit = items.find((it) => (it.end ? path === it.to : path === it.to || path.startsWith(`${it.to}/`)))
+  return hit?.group ?? hit?.label ?? 'Main Menu'
+}
+
 function Topbar({ role, onMenu, onSearch }: { role: Role; onMenu: () => void; onSearch: () => void }) {
   const navigate = useNavigate()
+  const { pathname } = useLocation()
   return (
-    <header className="sticky top-0 z-20 flex h-16 items-center gap-3 border-b border-slate-200/80 bg-white/85 px-4 backdrop-blur-md sm:px-6 lg:px-8">
-      <button onClick={onMenu} className={cn('-ml-1 rounded-lg p-2 text-slate-500 hover:bg-slate-100 lg:hidden', role === 'student' && 'hidden')} aria-label="Open menu">
+    <header className="sticky top-0 z-20 flex h-16 shrink-0 items-center gap-3 border-b border-slate-200/70 bg-white/85 px-4 backdrop-blur-md sm:px-6 lg:static lg:h-24 lg:gap-6 lg:border-0 lg:bg-white lg:px-8 lg:backdrop-blur-none">
+      <button onClick={onMenu} className={cn('-ml-1 rounded-full p-2 text-slate-500 hover:bg-slate-100 lg:hidden', role === 'student' && 'hidden')} aria-label="Open menu">
         <MenuIcon size={20} />
       </button>
       <div className={cn('lg:hidden', role !== 'student' && 'hidden sm:block')}>
         <Logo />
       </div>
+      <div className="hidden w-52 shrink-0 leading-tight lg:block">
+        <div className="truncate text-[19px] font-semibold tracking-tight text-slate-900">{pageTitle(role, pathname)}</div>
+        <div className="mt-1 text-[12.5px] text-slate-400">{weekday(todayStart())}, {formatDateLong(todayStart())}</div>
+      </div>
       {role !== 'student' ? (
-        <button onClick={onSearch} className="flex h-9 min-w-0 flex-1 items-center gap-2 rounded-lg border border-slate-200 bg-slate-50/80 px-3 text-sm text-slate-400 transition-colors hover:border-slate-300 hover:bg-white sm:max-w-md">
-          <Search size={16} />
+        <button onClick={onSearch} className="flex h-10 min-w-0 flex-1 items-center gap-2.5 rounded-full border border-slate-100 bg-slate-50 pr-1.5 pl-4 text-sm text-slate-400 transition-colors hover:border-slate-200 hover:bg-white sm:max-w-md lg:h-12 lg:max-w-lg">
+          <Search size={18} className="text-slate-500" />
           <span className="truncate">Search students, rooms, complaints…</span>
-          <kbd className="ml-auto hidden rounded border border-slate-200 bg-white px-1.5 text-[11px] font-medium text-slate-400 sm:block">⌘K</kbd>
+          <kbd className="ml-auto hidden h-8 items-center rounded-full bg-white px-3 font-sans text-[12px] font-medium text-slate-400 ring-1 ring-slate-200/70 sm:flex lg:h-9">⌘K</kbd>
         </button>
       ) : (
         <div className="flex-1" />
       )}
-      <div className="ml-auto flex items-center gap-1.5">
+      <div className="ml-auto flex items-center gap-2 lg:gap-3">
         {role === 'student' && (
-          <button onClick={() => navigate('/student/emergency')} className="flex h-9 items-center gap-1.5 rounded-lg bg-rose-600 px-3 text-[13px] font-semibold text-white shadow-sm hover:bg-rose-700">
+          <button onClick={() => navigate('/student/emergency')} className="flex h-10 items-center gap-1.5 rounded-full bg-rose-600 px-4 text-[13px] font-semibold text-white shadow-sm hover:bg-rose-700 lg:h-12">
             <Siren size={16} />
             <span className="hidden sm:inline">Emergency</span>
           </button>
@@ -214,12 +286,12 @@ function NotificationsButton({ role }: { role: Role }) {
   }
   return (
     <div ref={ref} className="relative">
-      <button onClick={() => setOpen((o) => !o)} className="relative rounded-lg p-2 text-slate-500 hover:bg-slate-100 hover:text-slate-800" aria-label="Notifications">
+      <button onClick={() => setOpen((o) => !o)} className="relative flex size-10 items-center justify-center rounded-full border border-slate-100 bg-slate-50 text-slate-600 transition-colors hover:bg-white hover:text-slate-900 lg:size-12" aria-label="Notifications">
         <Bell size={19} />
-        {unread > 0 && <span className="absolute top-1 right-1 flex min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] leading-4 font-semibold text-white ring-2 ring-white">{unread}</span>}
+        {unread > 0 && <span className="absolute -top-0.5 -right-0.5 flex min-w-4 items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] leading-4 font-semibold text-white ring-2 ring-white">{unread}</span>}
       </button>
       {open && (
-        <div className="fixed inset-x-3 top-16 z-40 animate-slide-up rounded-2xl border border-slate-200 bg-white shadow-pop sm:absolute sm:inset-x-auto sm:top-auto sm:right-0 sm:mt-2 sm:w-96">
+        <div className="fixed inset-x-3 top-16 z-40 animate-slide-up rounded-2xl border border-slate-200 bg-white shadow-pop sm:absolute sm:inset-x-auto sm:top-auto sm:right-0 sm:mt-2 sm:w-96 sm:rounded-3xl">
           <div className="flex items-center justify-between border-b border-slate-100 px-4 py-3">
             <span className="text-sm font-semibold text-slate-900">Notifications</span>
             {unread > 0 && (
@@ -291,17 +363,17 @@ function RoleSwitcher({ role }: { role: Role }) {
 
   return (
     <div ref={ref} className="relative">
-      <button onClick={() => setOpen((o) => !o)} className="flex items-center gap-2 rounded-xl py-1 pr-2 pl-1 hover:bg-slate-100">
-        <Avatar name={name} size="sm" />
+      <button onClick={() => setOpen((o) => !o)} className="flex items-center gap-2.5 rounded-full border border-slate-100 bg-white p-1 transition-colors hover:bg-slate-50 md:pr-4 lg:p-1.5 lg:pr-4">
+        <Avatar name={name} size="md" />
         <span className="hidden text-left leading-tight md:block">
-          <span className="block text-[13px] font-semibold text-slate-800">{name}</span>
-          <span className="block text-[11px] text-slate-500">{subtitle}</span>
+          <span className="block text-[14px] font-semibold text-slate-900">{name}</span>
+          <span className="block text-[12px] text-slate-500">{subtitle}</span>
         </span>
-        <ChevronsUpDown size={14} className="hidden text-slate-400 md:block" />
+        <ChevronDown size={16} className="ml-2 hidden text-slate-700 md:block" />
         <MoreHorizontal size={16} className="text-slate-400 md:hidden" />
       </button>
       {open && (
-        <div className="fixed inset-x-3 top-16 z-40 animate-slide-up rounded-2xl border border-slate-200 bg-white p-2 shadow-pop sm:absolute sm:inset-x-auto sm:top-auto sm:right-0 sm:mt-2 sm:w-80">
+        <div className="fixed inset-x-3 top-16 z-40 animate-slide-up rounded-2xl border border-slate-200 bg-white p-2 shadow-pop sm:absolute sm:inset-x-auto sm:top-auto sm:right-0 sm:mt-2 sm:w-80 sm:rounded-3xl">
           <div className="flex items-center gap-2 px-2.5 pt-1.5 pb-2">
             <FlaskConical size={14} className="text-amber-600" />
             <span className="text-[11px] font-semibold tracking-wider text-amber-700 uppercase">Prototype · Switch demo role</span>
@@ -372,7 +444,7 @@ function StudentTabBar({ onMore }: { onMore: () => void }) {
     <nav className="pb-safe fixed inset-x-0 bottom-0 z-30 border-t border-slate-200 bg-white/95 backdrop-blur lg:hidden">
       <div className="mx-auto grid max-w-lg grid-cols-5">
         {STUDENT_TABS.map((t) => (
-          <NavLink key={t.to} to={t.to} end={t.end} className={({ isActive }) => cn('flex flex-col items-center gap-1 py-2.5 text-[11px] font-medium', isActive ? 'text-brand-700' : 'text-slate-500')}>
+          <NavLink key={t.to} to={t.to} end={t.end} className={({ isActive }) => cn('flex flex-col items-center gap-1 py-2.5 text-[11px] font-medium', isActive ? 'text-ink' : 'text-slate-400')}>
             {({ isActive }) => (
               <>
                 <t.icon size={21} strokeWidth={isActive ? 2.2 : 1.8} />

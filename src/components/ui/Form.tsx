@@ -18,7 +18,7 @@ export function Field({ label, hint, error, children, className, required }: { l
 }
 
 const base =
-  'w-full rounded-lg border border-slate-200 bg-white px-3 text-sm text-slate-900 placeholder:text-slate-400 transition-colors hover:border-slate-300 focus:border-brand-500 focus:outline-none focus:ring-3 focus:ring-brand-500/15 disabled:bg-slate-50 disabled:text-slate-500'
+  'w-full rounded-xl border border-slate-200 bg-white px-3.5 text-sm text-slate-900 placeholder:text-slate-400 transition-colors hover:border-slate-300 focus:border-slate-400 focus:outline-none focus:ring-3 focus:ring-slate-900/8 disabled:bg-slate-50 disabled:text-slate-500'
 
 export const Input = forwardRef<HTMLInputElement, InputHTMLAttributes<HTMLInputElement> & { invalid?: boolean; prefix?: string }>(function Input({ className, invalid, prefix, ...rest }, ref) {
   if (prefix)
@@ -50,7 +50,7 @@ export function SearchInput({ value, onChange, placeholder = 'Search…', classN
   return (
     <div className={cn('relative', className)}>
       <Search size={16} className="pointer-events-none absolute top-1/2 left-3 -translate-y-1/2 text-slate-400" />
-      <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={cn(base, 'h-9 pr-8 pl-9')} />
+      <input value={value} onChange={(e) => onChange(e.target.value)} placeholder={placeholder} className={cn(base, 'h-10 rounded-full border-slate-100 bg-slate-50 pr-8 pl-9 hover:bg-white focus:bg-white')} />
       {value && (
         <button onClick={() => onChange('')} className="absolute top-1/2 right-2 -translate-y-1/2 rounded p-0.5 text-slate-400 hover:text-slate-700" aria-label="Clear search">
           <X size={14} />
@@ -74,7 +74,7 @@ export function Toggle({ checked, onChange, label, description }: { checked: boo
         role="switch"
         aria-checked={checked}
         onClick={() => onChange(!checked)}
-        className={cn('relative mt-0.5 inline-flex h-5 w-9 shrink-0 rounded-full transition-colors', checked ? 'bg-brand-600' : 'bg-slate-300')}
+        className={cn('relative mt-0.5 inline-flex h-5 w-9 shrink-0 rounded-full transition-colors', checked ? 'bg-ink' : 'bg-slate-300')}
       >
         <span className={cn('absolute top-0.5 left-0.5 size-4 rounded-full bg-white shadow transition-transform', checked && 'translate-x-4')} />
       </button>

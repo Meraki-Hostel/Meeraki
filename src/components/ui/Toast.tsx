@@ -36,7 +36,7 @@ export function ToastProvider({ children }: { children: ReactNode }) {
           {items.map((t) => {
             const Icon = t.kind === 'success' ? CheckCircle2 : t.kind === 'error' ? AlertCircle : Info
             return (
-              <div key={t.id} role="status" className="pointer-events-auto flex w-full max-w-sm animate-toast-in items-start gap-3 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-pop">
+              <div key={t.id} role="status" className="pointer-events-auto flex w-full max-w-sm animate-toast-in items-start gap-3 rounded-2xl border border-slate-200/80 bg-white px-4 py-3 shadow-pop">
                 <Icon size={18} className={cn('mt-px shrink-0', t.kind === 'success' ? 'text-emerald-600' : t.kind === 'error' ? 'text-rose-600' : 'text-brand-600')} />
                 <div className="min-w-0 flex-1">
                   <p className="text-sm font-medium text-slate-900">{t.title}</p>

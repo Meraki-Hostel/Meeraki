@@ -6,18 +6,18 @@ type Variant = 'primary' | 'secondary' | 'ghost' | 'danger' | 'subtle' | 'succes
 type Size = 'xs' | 'sm' | 'md' | 'lg'
 
 const VARIANTS: Record<Variant, string> = {
-  primary: 'bg-brand-600 text-white hover:bg-brand-700 active:bg-brand-800 shadow-[0_1px_0_rgba(255,255,255,0.15)_inset] disabled:bg-brand-300',
-  secondary: 'bg-white text-slate-800 border border-slate-200 hover:bg-slate-50 hover:border-slate-300 active:bg-slate-100 disabled:text-slate-400',
+  primary: 'bg-ink text-white hover:bg-slate-800 active:bg-black shadow-[0_1px_0_rgba(255,255,255,0.12)_inset] disabled:bg-slate-300',
+  secondary: 'bg-white text-slate-800 border border-slate-200/80 hover:bg-slate-50 hover:border-slate-300 active:bg-slate-100 disabled:text-slate-400',
   ghost: 'text-slate-600 hover:bg-slate-100 hover:text-slate-900 active:bg-slate-200 disabled:text-slate-300',
-  subtle: 'bg-brand-50 text-brand-700 hover:bg-brand-100 active:bg-brand-200 disabled:opacity-50',
+  subtle: 'bg-slate-100 text-ink hover:bg-slate-200/70 active:bg-slate-200 disabled:opacity-50',
   danger: 'bg-rose-600 text-white hover:bg-rose-700 active:bg-rose-800 disabled:bg-rose-300',
   success: 'bg-emerald-600 text-white hover:bg-emerald-700 active:bg-emerald-800 disabled:bg-emerald-300',
 }
 const SIZES: Record<Size, string> = {
-  xs: 'h-7 px-2.5 text-xs gap-1.5 rounded-md',
-  sm: 'h-8 px-3 text-[13px] gap-1.5 rounded-lg',
-  md: 'h-9 px-3.5 text-sm gap-2 rounded-lg',
-  lg: 'h-11 px-5 text-[15px] gap-2 rounded-xl',
+  xs: 'h-7 px-3 text-xs gap-1.5 rounded-full',
+  sm: 'h-9 px-3.5 text-[13px] gap-1.5 rounded-full',
+  md: 'h-10 px-4 text-sm gap-2 rounded-full',
+  lg: 'h-12 px-6 text-[15px] gap-2 rounded-full',
 }
 
 export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
@@ -43,7 +43,7 @@ export const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button
         'inline-flex shrink-0 items-center justify-center whitespace-nowrap font-medium transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-brand-500',
         VARIANTS[variant],
         SIZES[size],
-        !children && (size === 'xs' ? 'w-7 px-0' : size === 'sm' ? 'w-8 px-0' : size === 'lg' ? 'w-11 px-0' : 'w-9 px-0'),
+        !children && (size === 'xs' ? 'w-7 px-0' : size === 'sm' ? 'w-9 px-0' : size === 'lg' ? 'w-12 px-0' : 'w-10 px-0'),
         className,
       )}
       {...rest}

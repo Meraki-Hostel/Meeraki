@@ -3,7 +3,7 @@ import { cn } from '../../lib/utils'
 
 export function Card({ className, children, ...rest }: HTMLAttributes<HTMLDivElement>) {
   return (
-    <div className={cn('rounded-2xl border border-slate-200/80 bg-white shadow-card', className)} {...rest}>
+    <div className={cn('rounded-card border border-slate-200/70 bg-white shadow-card', className)} {...rest}>
       {children}
     </div>
   )
@@ -11,11 +11,11 @@ export function Card({ className, children, ...rest }: HTMLAttributes<HTMLDivEle
 
 export function CardHeader({ title, subtitle, action, icon, className }: { title: ReactNode; subtitle?: ReactNode; action?: ReactNode; icon?: ReactNode; className?: string }) {
   return (
-    <div className={cn('flex items-start justify-between gap-3 px-5 pt-4 pb-3', className)}>
+    <div className={cn('flex items-start justify-between gap-3 px-5 pt-5 pb-3', className)}>
       <div className="flex min-w-0 items-center gap-2.5">
         {icon}
         <div className="min-w-0">
-          <h3 className="truncate text-[15px] font-semibold text-slate-900">{title}</h3>
+          <h3 className="truncate text-[16px] font-semibold tracking-tight text-slate-900">{title}</h3>
           {subtitle && <p className="mt-0.5 text-[13px] text-slate-500">{subtitle}</p>}
         </div>
       </div>
@@ -51,7 +51,7 @@ export function InfoRow({ label, value, className }: { label: ReactNode; value: 
 }
 
 export function ProgressBar({ value, tone = 'brand', className }: { value: number; tone?: 'brand' | 'green' | 'amber' | 'red'; className?: string }) {
-  const c = { brand: 'bg-brand-500', green: 'bg-emerald-500', amber: 'bg-amber-500', red: 'bg-rose-500' }[tone]
+  const c = { brand: 'bg-ink', green: 'bg-emerald-500', amber: 'bg-amber-500', red: 'bg-rose-500' }[tone]
   return (
     <div className={cn('h-1.5 w-full overflow-hidden rounded-full bg-slate-100', className)}>
       <div className={cn('h-full rounded-full transition-[width] duration-500', c)} style={{ width: `${Math.max(0, Math.min(100, value * 100))}%` }} />

@@ -13,7 +13,7 @@ export function Table({ children, className }: { children: ReactNode; className?
 
 export function Th({ children, className, sort, onSort, ...rest }: ThHTMLAttributes<HTMLTableCellElement> & { sort?: 'asc' | 'desc' | null; onSort?: () => void }) {
   return (
-    <th className={cn('sticky top-0 border-b border-slate-200 bg-slate-50/80 px-4 py-2.5 text-left text-xs font-medium whitespace-nowrap text-slate-500 first:pl-5 last:pr-5', className)} {...rest}>
+    <th className={cn('sticky top-0 border-b border-slate-100 bg-slate-50/60 px-4 py-3 text-left text-xs font-medium whitespace-nowrap text-slate-500 first:pl-5 last:pr-5', className)} {...rest}>
       {onSort ? (
         <button onClick={onSort} className="inline-flex items-center gap-1 hover:text-slate-800">
           {children}

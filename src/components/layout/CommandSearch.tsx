@@ -81,11 +81,11 @@ export function CommandSearch({ role, onClose }: { role: Role; onClose: () => vo
   return createPortal(
     <div className="fixed inset-0 z-[60] flex items-start justify-center p-3 pt-[10vh]">
       <div className="absolute inset-0 animate-fade-in bg-slate-900/40 backdrop-blur-[2px]" onClick={onClose} />
-      <div className="relative w-full max-w-xl animate-slide-up overflow-hidden rounded-2xl bg-white shadow-pop">
+      <div className="relative w-full max-w-xl animate-slide-up overflow-hidden rounded-3xl bg-white shadow-pop">
         <div className="flex items-center gap-3 border-b border-slate-100 px-4">
           <Search size={18} className="text-slate-400" />
           <input autoFocus value={q} onChange={(e) => setQ(e.target.value)} placeholder={owner ? 'Search across all properties…' : 'Search students, rooms, complaints, receipts…'} className="h-14 flex-1 bg-transparent text-[15px] outline-none placeholder:text-slate-400" />
-          <kbd className="rounded border border-slate-200 px-1.5 text-[11px] text-slate-400">Esc</kbd>
+          <kbd className="rounded-full border border-slate-200 px-2 text-[11px] text-slate-400">Esc</kbd>
         </div>
         <div className="scrollbar-thin max-h-[60vh] overflow-y-auto p-2">
           {!q && (

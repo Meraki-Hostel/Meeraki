@@ -6,7 +6,7 @@ export type Tone = 'neutral' | 'brand' | 'green' | 'amber' | 'red' | 'blue' | 'v
 const TONES: Record<Tone, string> = {
   neutral: 'bg-slate-100 text-slate-700 ring-slate-200',
   slate: 'bg-slate-50 text-slate-500 ring-slate-200',
-  brand: 'bg-brand-50 text-brand-700 ring-brand-200',
+  brand: 'bg-lavender text-violet-900 ring-lavender-deep',
   green: 'bg-emerald-50 text-emerald-700 ring-emerald-200',
   amber: 'bg-amber-50 text-amber-800 ring-amber-200',
   red: 'bg-rose-50 text-rose-700 ring-rose-200',
@@ -14,7 +14,7 @@ const TONES: Record<Tone, string> = {
   violet: 'bg-violet-50 text-violet-700 ring-violet-200',
 }
 const DOTS: Record<Tone, string> = {
-  neutral: 'bg-slate-400', slate: 'bg-slate-300', brand: 'bg-brand-500', green: 'bg-emerald-500', amber: 'bg-amber-500', red: 'bg-rose-500', blue: 'bg-sky-500', violet: 'bg-violet-500',
+  neutral: 'bg-slate-400', slate: 'bg-slate-300', brand: 'bg-violet-500', green: 'bg-emerald-500', amber: 'bg-amber-500', red: 'bg-rose-500', blue: 'bg-sky-500', violet: 'bg-violet-500',
 }
 
 export function Badge({ tone = 'neutral', dot, children, className }: { tone?: Tone; dot?: boolean; children: ReactNode; className?: string }) {
