@@ -18,6 +18,8 @@ npm run dev        # http://localhost:5173
 
 | Path | What |
 | --- | --- |
+
+added contribution
 | `src/data/seed.ts` | Deterministic, relational mock data (5 properties, 1,250 beds, ~1,080 students, dues, complaints, …) |
 | `src/store/AppStore.tsx` | Single client store: every prototype action (add student, assign/transfer bed, payments, complaints, leave, …) |
 | `src/store/selectors.ts` | Derived values (payment status, occupancy, KPIs) — computed, never stored, so every screen stays consistent |
