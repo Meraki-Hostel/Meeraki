@@ -14,9 +14,12 @@ export function createApp() {
   app.use(helmet());
   app.use(cors({
     origin(origin, cb) {
-      // No Origin = mobile app / curl → allow. Else must be allowlisted.
-      if (!origin || env.corsOrigins.includes(origin)) return cb(null, true);
-      cb(new Error("Not allowed by CORS"));
+      // No Origin = mobile app / curl / server-to-server → allow.
+      // Else must match CORS_ORIGINS list or '*'
+      if (!origin || env.corsOrigins.includes("*") || env.corsOrigins.includes(origin)) {
+        return cb(null, true);
+      }
+      cb(new Error(`Origin ${origin} not allowed by CORS`));
     },
     credentials: true,
   }));
