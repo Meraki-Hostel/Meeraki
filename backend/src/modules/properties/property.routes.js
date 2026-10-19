@@ -1,0 +1,13 @@
+import { Router } from "express";
+import * as c from "./property.controller.js";
+import { authenticate } from "../../middleware/authenticate.js";
+import { validate } from "../../middleware/validate.js";
+import { createSchema, updateSchema, listSchema, statusSchema } from "./property.validation.js";
+const r = Router();
+r.use(authenticate);
+r.get("/", validate(listSchema, "query"), c.list);
+r.post("/", validate(createSchema), c.create);
+r.get("/:id", c.get);
+r.patch("/:id", validate(updateSchema), c.update);
+r.patch("/:id/status", validate(statusSchema), c.setStatus);
+export default r;

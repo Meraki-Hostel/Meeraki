@@ -1,0 +1,349 @@
+// Meraki schema — field names, enum values and relationships mirror the
+// frontend's src/types/domain.ts so API JSON maps 1:1 to the frontend types.
+// Enum member names ARE the exact string values the frontend sends/expects.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+// ── Enums (values match domain.ts) ───────────────────────────────────────────
+enum Role {
+  owner
+  manager
+  student
+}
+
+enum PropertyStatus {
+  active
+  onboarding
+  inactive
+}
+
+enum PropertyType {
+  boys
+  girls
+  coed
+}
+
+enum RoomType {
+  single
+  double
+  triple
+  quad
+}
+
+enum RoomStatus {
+  active
+  maintenance
+}
+
+enum BedStatus {
+  available
+  occupied
+  unavailable
+}
+
+enum StudentStatus {
+  active
+  notice
+  pending
+  moved_out
+}
+
+enum Gender {
+  male
+  female
+  other
+}
+
+enum StaffRole {
+  manager
+  warden
+  accountant
+  housekeeping
+  security
+  cook
+  maintenance
+}
+
+enum StaffStatus {
+  active
+  invited
+  on_leave
+  inactive
+}
+
+enum Shift {
+  general
+  morning
+  evening
+  night
+}
+
+enum PaymentMethod {
+  upi
+  cash
+  bank_transfer
+  card
+}
+
+enum InvitationStatus {
+  pending
+  accepted
+  expired
+}
+
+// ── Identity ─────────────────────────────────────────────────────────────────
+model User {
+  id          String  @id @default(uuid())
+  name        String
+  email       String  @unique
+  phone       String
+  role        Role
+  title       String  @default("")
+  passwordHash String
+  // Links mirrored from domain.ts User
+  propertyId  String?
+  studentId   String? @unique
+  staffId     String?
+  preferences Json    @default("{\"emailDigest\":true,\"smsAlerts\":false,\"compactTables\":false}")
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  refreshTokens RefreshToken[]
+  student       StudentProfile? @relation(fields: [studentId], references: [id])
+
+  @@index([role])
+  @@index([propertyId])
+}
+
+model RefreshToken {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique
+  expiresAt DateTime
+  revokedAt DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+model Invitation {
+  token     String           @id
+  name      String
+  email     String
+  role      String // Role | 'staff'
+  propertyId String?
+  invitedBy String
+  status    InvitationStatus @default(pending)
+  expiresAt DateTime
+  createdAt DateTime         @default(now())
+}
+
+// ── Property / rooms / beds ──────────────────────────────────────────────────
+model Property {
+  id            String         @id @default(uuid())
+  name          String
+  code          String         @unique
+  type          PropertyType
+  status        PropertyStatus @default(active)
+  city          String
+  locality      String
+  address       String
+  pincode       String
+  phone         String
+  managerStaffId String?
+  baseRent      Int
+  amenities     String[]
+  openedOn      DateTime
+  imageVariant  Int            @default(0)
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  rooms    Room[]
+  beds     Bed[]
+  students StudentProfile[]
+  charges  RentCharge[]
+  payments Payment[]
+
+  @@index([status])
+}
+
+model Room {
+  id           String     @id @default(uuid())
+  propertyId   String
+  number       String
+  floor        Int
+  type         RoomType
+  rent         Int
+  ac           Boolean    @default(false)
+  attachedBath Boolean    @default(false)
+  status       RoomStatus @default(active)
+  createdAt    DateTime   @default(now())
+  updatedAt    DateTime   @updatedAt
+
+  property Property         @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  beds     Bed[]
+  students StudentProfile[]
+
+  @@unique([propertyId, number])
+  @@index([propertyId])
+}
+
+model Bed {
+  id                String    @id @default(uuid())
+  roomId            String
+  propertyId        String
+  label             String
+  status            BedStatus @default(available)
+  studentId         String?   @unique
+  unavailableReason String?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  room     Room            @relation(fields: [roomId], references: [id], onDelete: Cascade)
+  property Property        @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  student  StudentProfile? @relation("StudentBed", fields: [studentId], references: [id])
+
+  @@unique([roomId, label])
+  @@index([propertyId, status])
+}
+
+// ── People ───────────────────────────────────────────────────────────────────
+model StudentProfile {
+  id              String        @id @default(uuid())
+  studentCode     String        @unique
+  name            String
+  email           String
+  phone           String
+  gender          Gender
+  dob             DateTime
+  college         String
+  course          String
+  year            Int
+  propertyId      String
+  roomId          String?
+  bedId           String?       @unique
+  status          StudentStatus @default(pending)
+  joinedOn        DateTime
+  monthlyRent     Int
+  address         String        @default("")
+  bloodGroup      String        @default("")
+  guardianName    String        @default("")
+  guardianRelation String       @default("")
+  guardianPhone   String        @default("")
+  emergencyName   String        @default("")
+  emergencyPhone  String        @default("")
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  property   Property   @relation(fields: [propertyId], references: [id])
+  room       Room?      @relation(fields: [roomId], references: [id])
+  bedRef     Bed?       @relation("StudentBed")
+  user       User?
+  charges    RentCharge[]
+  payments   Payment[]
+
+  @@index([propertyId, status])
+}
+
+model StaffMember {
+  id         String      @id @default(uuid())
+  name       String
+  role       StaffRole
+  propertyId String?
+  phone      String
+  email      String
+  shift      Shift       @default(general)
+  status     StaffStatus @default(active)
+  joinedOn   DateTime
+  createdAt  DateTime    @default(now())
+  updatedAt  DateTime    @updatedAt
+
+  @@index([propertyId])
+}
+
+// ── Money ────────────────────────────────────────────────────────────────────
+model RentCharge {
+  id          String   @id @default(uuid())
+  studentId   String
+  propertyId  String
+  period      String // YYYY-MM
+  amount      Int
+  dueDate     DateTime
+  description String   @default("")
+  createdAt   DateTime @default(now())
+
+  student  StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  property Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  payments Payment[]
+
+  @@unique([studentId, period])
+  @@index([propertyId, period])
+}
+
+model Payment {
+  id         String        @id @default(uuid())
+  chargeId   String
+  studentId  String
+  propertyId String
+  amount     Int
+  method     PaymentMethod
+  paidOn     DateTime
+  reference  String
+  receiptNo  String        @unique
+  recordedBy String
+  note       String?
+  // Set for online (gateway) payments; lets webhooks reconcile idempotently.
+  gatewayOrderId   String? @unique
+  gatewayPaymentId String?
+  createdAt  DateTime      @default(now())
+
+  charge   RentCharge     @relation(fields: [chargeId], references: [id], onDelete: Cascade)
+  student  StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  property Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, paidOn])
+  @@index([studentId])
+}
+
+// Named counters (e.g. receipt sequence) incremented inside transactions.
+model Counter {
+  key   String @id
+  value Int    @default(0)
+}
+
+// ── Side-effect records (created by payment flows, read by other screens) ─────
+model Notification {
+  id              String   @id @default(uuid())
+  recipientUserId String
+  title           String
+  body            String
+  category        String
+  link            String?
+  read            Boolean  @default(false)
+  createdAt       DateTime @default(now())
+
+  @@index([recipientUserId, read])
+}
+
+model ActivityLog {
+  id         String   @id @default(uuid())
+  propertyId String?
+  actorName  String
+  actorRole  String
+  category   String
+  message    String
+  link       String?
+  createdAt  DateTime @default(now())
+
+  @@index([propertyId])
+  @@index([createdAt])
+}
