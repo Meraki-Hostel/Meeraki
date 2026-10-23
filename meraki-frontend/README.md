@@ -1,17 +1,26 @@
 # Meraki Hostel Management — Frontend
 
-A complete, frontend-only hostel-management app with three role experiences — **Owner**, **Manager/Warden** and **Student** — running entirely on a typed mock service layer with deterministic demo data. No backend is required.
-
-> **Demo only.** Authentication, payments, messaging and uploads are simulated. Data lives in your browser's `localStorage` and is neither private nor secure. Role checks in the browser are a demonstration; a real backend must enforce authorization.
+A hostel-management app with three role experiences — **Owner**, **Manager/Warden** and **Student** — built on a typed service layer (`src/services/interfaces.ts`) that runs either against the real API in [`../backend`](../backend) or on an in-memory mock.
 
 ## Quick start
 
 Requires Node.js 18+ (tested on Node 22).
 
 ```bash
+cd meraki-frontend
 npm install
-npm run dev        # http://localhost:5173
+cp .env.example .env   # points at the local API; delete the line to run on the mock only
+npm run dev            # http://localhost:5173
 ```
+
+### Real API vs mock
+
+`src/services/index.ts` picks the implementation per module:
+
+- **`VITE_API_BASE_URL` set** (e.g. `http://localhost:4000/api/v1`): auth, properties, rooms/beds, students, payments, notifications and activity go through `src/services/http/*` to the backend. Start the backend first (see its README). Demo logins: `owner@demo.com` / `manager@demo.com` / `student@demo.com`, password `meraki@123`.
+- **Not set**: everything runs on the mock (`src/services/mock/*`, persisted to `localStorage`). Nothing is private or secure in this mode.
+
+Modules the backend doesn't have yet (complaints, leave, visitors, maintenance, inventory, staff, announcements, events, feedback, documents, analytics, settings, search) stay on the mock in both modes, showing demo data. `http/mockSessionBridge.ts` keeps them signed in as the demo user with the same role. When a backend module lands, add its adapter under `src/services/http/` and flip that one line in `index.ts`.
 
 | Command | What it does |
 | --- | --- |

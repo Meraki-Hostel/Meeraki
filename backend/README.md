@@ -38,16 +38,19 @@ errors just like they did with the mock.
 ## Setup
 
 ```bash
+cd backend
 npm install
 cp .env.example .env     # then fill in the values below
 ```
 
-1. **Neon** (neon.tech): create a project, copy the **pooled** URL into
-   `DATABASE_URL` and the **direct** URL into `DIRECT_URL`.
+1. **Database**: either Neon (neon.tech; copy the **pooled** URL into
+   `DATABASE_URL` and the **direct** URL into `DIRECT_URL`), or a local Postgres
+   (`createdb meraki_dev`, then put
+   `postgresql://<you>@localhost:5432/meraki_dev` in both).
 2. **JWT secrets**: `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"` — put two different values in `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET`.
-3. **Migrate + seed**:
+3. **Migrate + seed** (migrations are committed in `prisma/migrations/`):
    ```bash
-   npm run prisma:migrate -- --name init
+   npm run prisma:migrate     # applies migrations; after editing schema.prisma add `-- --name <change>`
    npm run db:seed
    ```
 4. **Run**: `npm run dev` → http://localhost:4000/health
@@ -103,20 +106,25 @@ POST   /api/v1/payments/reminders              payments.sendReminders
 ```
 (Full list in the route files.)
 
-## Wiring it into the frontend
+## Frontend integration
 
-The `frontend-adapters/` folder drops into your frontend:
+The HTTP adapters live in `../meraki-frontend/src/services/http/` and are
+switched on by `VITE_API_BASE_URL` (see the frontend README). Auth, properties,
+rooms/beds, students, payments, notifications and activity use this API.
 
-1. Copy `frontend-adapters/http/` → `your-frontend/src/services/http/`
-   (the three files: `client.ts`, `auth-and-payments.ts`, `spine.ts`).
-2. Replace `src/services/index.ts` with `frontend-adapters/http/index.ts`
-   (it switches mock → http per service and keeps mocks for unbuilt modules).
-3. Add to the frontend `.env`:
-   ```
-   VITE_API_BASE_URL=http://localhost:4000/api/v1
-   ```
-4. Run both. Login with a demo account; auth, properties, rooms, students and
-   payments now hit the real API. Unset `VITE_API_BASE_URL` to fall back to mock.
+## Deploying
+
+Any Node host works (Render, Railway, Fly). Point it at the `backend/` folder:
+
+- **Build**: `npm ci --include=dev && npm run build` (generates the Prisma
+  client and runs `prisma migrate deploy`)
+- **Start**: `npm start`
+- **Env vars**: everything in `.env.example`. Set `NODE_ENV=production`, real
+  secrets, and `CORS_ORIGINS` to the deployed frontend URL(s), comma-separated.
+- **Health check**: `GET /health`
+
+Run `npm run db:seed` once against a new database only if you want the demo
+accounts there.
 
 ## Adding the remaining modules (the recipe)
 

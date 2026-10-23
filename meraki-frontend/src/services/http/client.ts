@@ -46,15 +46,29 @@ async function tryRefresh(): Promise<boolean> {
   return true;
 }
 
+/**
+ * Change feed for HTTP writes. Pages re-fetch via `subscribeToData`, which the
+ * mock drives from the repository; here every successful non-GET request
+ * (except auth calls, which SessionProvider handles itself) signals a change.
+ */
+type Listener = () => void;
+const listeners = new Set<Listener>();
+export function subscribeToHttpChanges(fn: Listener): () => void {
+  listeners.add(fn);
+  return () => listeners.delete(fn);
+}
+
 async function request<T>(method: string, path: string, body?: unknown, auth = true): Promise<T> {
   let res = await raw(path, { method, body: body === undefined ? undefined : JSON.stringify(body) }, auth);
   if (res.status === 401 && auth && (await tryRefresh())) {
     res = await raw(path, { method, body: body === undefined ? undefined : JSON.stringify(body) }, auth);
   }
-  return parse<T>(res);
+  const data = await parse<T>(res);
+  if (method !== 'GET' && !path.startsWith('/auth/')) listeners.forEach((l) => l());
+  return data;
 }
 
-function qs(params?: Record<string, unknown>): string {
+function qs(params?: object): string {
   if (!params) return '';
   const sp = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== null && v !== '') sp.set(k, String(v));
@@ -63,7 +77,7 @@ function qs(params?: Record<string, unknown>): string {
 }
 
 export const http = {
-  get: <T>(path: string, params?: Record<string, unknown>, auth = true) => request<T>('GET', path + qs(params), undefined, auth),
+  get: <T>(path: string, params?: object, auth = true) => request<T>('GET', path + qs(params), undefined, auth),
   post: <T>(path: string, body?: unknown, auth = true) => request<T>('POST', path, body, auth),
   patch: <T>(path: string, body?: unknown, auth = true) => request<T>('PATCH', path, body, auth),
   del: <T>(path: string, auth = true) => request<T>('DELETE', path, undefined, auth),

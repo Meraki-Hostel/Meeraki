@@ -1,8 +1,13 @@
 import { repository } from './repository';
+import { subscribeToHttpChanges } from './http/client';
 
 /**
- * Change feed for the UI layer. Mock implementation forwards repository
- * changes; an HTTP adapter could forward websocket/SSE events instead.
+ * Change feed for the UI layer. Forwards both mock repository changes and
+ * successful HTTP writes; a websocket/SSE feed could be added here later.
  */
-export const subscribeToData = (fn: () => void) => repository.subscribe(fn);
+export const subscribeToData = (fn: () => void) => {
+  const offRepo = repository.subscribe(fn);
+  const offHttp = subscribeToHttpChanges(fn);
+  return () => { offRepo(); offHttp(); };
+};
 export const dataRecoveredFromCorruption = () => repository.recoveredFromCorruption;

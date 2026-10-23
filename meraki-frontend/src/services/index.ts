@@ -8,18 +8,30 @@ import { mockComplaintService, mockLeaveService, mockVisitorService } from './mo
 import { mockInventoryService, mockMaintenanceService, mockStaffService } from './mock/operations';
 import { mockActivityService, mockAnnouncementService, mockDocumentService, mockEventService, mockFeedbackService, mockNotificationService } from './mock/communication';
 import { mockAnalyticsService, mockSearchService, mockSettingsService } from './mock/insights';
+import { httpAuthService, httpPaymentService } from './http/auth-and-payments';
+import { httpPropertyService, httpRoomService, httpStudentService } from './http/spine';
+import { httpActivityService, httpNotificationService } from './http/misc';
+import { withMockSessionMirror } from './http/mockSessionBridge';
 
 /**
- * Service container. To integrate a backend, implement the same interfaces
- * with HTTP adapters (e.g. `src/services/http/*`) and swap them in here.
- * TODO(backend): choose implementation via `import.meta.env.VITE_API_BASE_URL`.
+ * Service container. When VITE_API_BASE_URL is set, the modules the backend
+ * implements use real HTTP; the rest stay on the in-memory mock until their
+ * backend modules are built (same interface, so each swap is one line here).
+ * Leave VITE_API_BASE_URL unset to run fully on the mock.
  */
+const useApi = Boolean(import.meta.env.VITE_API_BASE_URL);
+
 export const services: Services = {
-  auth: mockAuthService,
-  properties: mockPropertyService,
-  rooms: mockRoomService,
-  students: mockStudentService,
-  payments: mockPaymentService,
+  // Served by the backend:
+  auth: useApi ? withMockSessionMirror(httpAuthService) : mockAuthService,
+  properties: useApi ? httpPropertyService : mockPropertyService,
+  rooms: useApi ? httpRoomService : mockRoomService,
+  students: useApi ? httpStudentService : mockStudentService,
+  payments: useApi ? httpPaymentService : mockPaymentService,
+  notifications: useApi ? httpNotificationService : mockNotificationService,
+  activity: useApi ? httpActivityService : mockActivityService,
+
+  // Still mock until their backend modules are built:
   complaints: mockComplaintService,
   leave: mockLeaveService,
   visitors: mockVisitorService,
@@ -30,8 +42,6 @@ export const services: Services = {
   staff: mockStaffService,
   feedback: mockFeedbackService,
   documents: mockDocumentService,
-  notifications: mockNotificationService,
-  activity: mockActivityService,
   analytics: mockAnalyticsService,
   settings: mockSettingsService,
   search: mockSearchService,
