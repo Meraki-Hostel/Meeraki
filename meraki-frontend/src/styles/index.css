@@ -1,0 +1,99 @@
+@import 'tailwindcss';
+
+/* Meraki design tokens — warm ivory, clay accent, espresso type, slate-blue data. */
+@theme {
+  --font-display: 'Fraunces Variable', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
+  --font-sans: 'Figtree Variable', 'Segoe UI', system-ui, -apple-system, sans-serif;
+
+  --color-ivory: #f6efe4;
+  --color-sand: #efe4d4;
+  --color-cream: #fffaf2;
+  --color-line: #e6d8c5;
+  --color-line-strong: #d6c3aa;
+
+  --color-clay-50: #f8ece8;
+  --color-clay-100: #f0d9d2;
+  --color-clay-200: #e2bcb1;
+  --color-clay-400: #b47f73;
+  --color-clay-500: #9c665b;
+  --color-clay-600: #8c5850;
+  --color-clay-700: #744640;
+  --color-clay-800: #5b3530;
+
+  --color-espresso: #3b2622;
+  --color-bark: #5a4540;
+  --color-dust: #7d6b63;
+  --color-mute: #a39388;
+
+  --color-slate-ink: #3f5784;
+  --color-slate-mid: #5a72a0;
+  --color-slate-soft: #b9c6df;
+  --color-slate-wash: #e7ecf5;
+
+  --color-moss: #4c7a58;
+  --color-moss-wash: #e4efe2;
+  --color-amber: #a6731f;
+  --color-amber-wash: #f7ebd2;
+  --color-brick: #b0473e;
+  --color-brick-wash: #f7e1dc;
+
+  --radius-card: 1.125rem;
+  --radius-field: 0.75rem;
+
+  --shadow-soft: 0 1px 2px rgb(59 38 34 / 0.04), 0 6px 18px -8px rgb(59 38 34 / 0.12);
+  --shadow-lift: 0 2px 4px rgb(59 38 34 / 0.05), 0 22px 48px -18px rgb(59 38 34 / 0.28);
+
+  --breakpoint-xs: 22.5rem;
+}
+
+@layer base {
+  html { color-scheme: light; -webkit-text-size-adjust: 100%; }
+  body {
+    @apply bg-ivory font-sans text-espresso antialiased;
+    font-feature-settings: 'ss01';
+    min-height: 100dvh;
+  }
+  h1, h2, h3 { @apply font-display; font-optical-sizing: auto; letter-spacing: -0.01em; }
+  :focus-visible { outline: 2px solid var(--color-clay-600); outline-offset: 2px; border-radius: 6px; }
+  ::selection { background: var(--color-clay-100); }
+  button, [role='button'] { cursor: pointer; }
+  button:disabled { cursor: not-allowed; }
+  table { font-variant-numeric: tabular-nums; }
+}
+
+@layer components {
+  .surface { @apply min-w-0 rounded-[var(--radius-card)] border border-line bg-cream shadow-[var(--shadow-soft)]; }
+  .field-base {
+    @apply w-full rounded-[var(--radius-field)] border border-line bg-white/80 px-3.5 py-2.5 text-sm text-espresso
+      placeholder:text-mute transition-colors hover:border-line-strong focus:border-clay-500 focus:outline-none
+      focus:ring-2 focus:ring-clay-100 disabled:bg-sand/60 disabled:text-dust;
+  }
+  .field-error { @apply border-brick/70 focus:border-brick focus:ring-brick-wash; }
+  .scroll-thin { scrollbar-width: thin; scrollbar-color: var(--color-line-strong) transparent; }
+}
+
+@keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+@keyframes drawer-in { from { transform: translateX(100%); } to { transform: none; } }
+@keyframes rise-in { from { opacity: 0; transform: translateY(10px) scale(0.985); } to { opacity: 1; transform: none; } }
+@keyframes shimmer { 0% { background-position: -400px 0; } 100% { background-position: 400px 0; } }
+.anim-toast { animation: toast-in 0.22s ease-out; }
+.anim-fade { animation: fade-in 0.18s ease-out; }
+.anim-drawer { animation: drawer-in 0.24s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.anim-rise { animation: rise-in 0.22s cubic-bezier(0.2, 0.8, 0.2, 1); }
+.skeleton {
+  background: linear-gradient(90deg, var(--color-sand) 0, #f6ecdf 50%, var(--color-sand) 100%);
+  background-size: 800px 100%;
+  animation: shimmer 1.4s infinite linear;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; scroll-behavior: auto !important; }
+}
+
+@media print {
+  body * { visibility: hidden; }
+  .print-area, .print-area * { visibility: visible; }
+  .print-area { position: absolute; inset: 0; padding: 24px; background: white; }
+  .no-print { display: none !important; }
+}
