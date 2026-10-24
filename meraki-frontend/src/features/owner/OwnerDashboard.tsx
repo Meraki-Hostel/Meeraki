@@ -15,11 +15,11 @@ import { PageSkeleton, ErrorState, Skeleton } from '@/components/ui/States';
 import { ActivityFeed } from '@/components/domain/ActivityFeed';
 import { PropertyImage } from '@/components/brand/PropertyImage';
 import { exportCSV } from '@/lib/export';
-import { currentPeriod, greeting } from '@/lib/clock';
+import { currentPeriod, greeting, recentPeriods } from '@/lib/clock';
+import { isAvailable } from '@/lib/features';
 import { formatINR, formatNumber, formatPeriod } from '@/lib/format';
 import { Link } from 'react-router-dom';
 
-const PERIODS = ['2026-10', '2026-09', '2026-08'];
 
 function OccTick({ x = 0, y = 0, payload, data }: { x?: number; y?: number; payload?: { value: string; index: number }; data: Array<{ name: string; pct: number }> }) {
   const d = data.find((r) => r.name === payload?.value);
@@ -34,6 +34,7 @@ function OccTick({ x = 0, y = 0, payload, data }: { x?: number; y?: number; payl
 export function OwnerDashboard() {
   const user = useCurrentUser();
   const navigate = useNavigate();
+  const PERIODS = recentPeriods(3);
   const [period, setPeriod] = useState(currentPeriod());
   const [occMode, setOccMode] = useState<'pct' | 'beds'>('pct');
   const overview = useQuery(() => services.analytics.ownerOverview(period), [period]);
@@ -58,7 +59,9 @@ export function OwnerDashboard() {
     { header: 'Property', value: (p) => p.name }, { header: 'Locality', value: (p) => p.locality }, { header: 'Status', value: (p) => p.status },
     { header: 'Rooms', value: (p) => p.stats.rooms }, { header: 'Beds', value: (p) => p.stats.beds }, { header: 'Occupied beds', value: (p) => p.stats.occupiedBeds },
     { header: 'Occupancy %', value: (p) => p.stats.occupancyPct }, { header: 'Expected rent (current month)', value: (p) => p.stats.expectedRent }, { header: 'Collected', value: (p) => p.stats.collectedRent },
-    { header: 'Open complaints', value: (p) => p.stats.openComplaints }, { header: 'Manager', value: (p) => p.stats.managerName },
+    // Complaint counts only once that module has a backend; never a made-up zero.
+    ...(isAvailable('complaints') ? [{ header: 'Open complaints', value: (p: (typeof props.data)[number]) => p.stats.openComplaints ?? '' }] : []),
+    { header: 'Manager', value: (p) => p.stats.managerName },
   ]);
 
   return (
@@ -70,8 +73,8 @@ export function OwnerDashboard() {
         </>} />
 
       <section aria-label="Key figures" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
-        <KpiCard label="Total properties" value={o.properties} hint={`${o.activeProperties} active · across Lucknow`} icon={<Building2 className="size-5" />} to="/owner/properties" />
-        <KpiCard label="Rooms · beds" value={`${o.rooms} · ${o.beds}`} hint={`${o.beds - o.occupiedBeds} beds free right now`} icon={<BedDouble className="size-5" />} to="/owner/analytics" />
+        <KpiCard label="Total properties" value={o.properties} hint={`${o.activeProperties} active`} icon={<Building2 className="size-5" />} to="/owner/properties" />
+        <KpiCard label="Rooms · beds" value={`${o.rooms} · ${o.beds}`} hint={`${o.beds - o.occupiedBeds} beds free right now`} icon={<BedDouble className="size-5" />} to="/owner/properties" />
         <KpiCard label="Total students" value={formatNumber(o.students)} hint="Occupancy across all beds" icon={<Users className="size-5" />} progress={o.occupancyPct} />
         <KpiCard label="Monthly rent expected" value={formatINR(o.expectedRent)} hint={formatPeriod(period)} icon={<IndianRupee className="size-5" />} tone="amber" to="/owner/finance" />
       </section>
@@ -157,10 +160,11 @@ export function OwnerDashboard() {
           <CardHeader title="Quick actions" subtitle="Common tasks across your portfolio" />
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3">
             <QuickAction icon={<Plus className="size-5" />} label="Add property" to="/owner/properties/new" />
-            <QuickAction icon={<UserPlus className="size-5" />} label="Invite staff" to="/owner/staff" />
+            {isAvailable('staff') && <QuickAction icon={<UserPlus className="size-5" />} label="Invite staff" to="/owner/staff" />}
             <QuickAction icon={<Wallet className="size-5" />} label="Rent ledger" to="/owner/finance" />
-            <QuickAction icon={<BarChart3 className="size-5" />} label="Generate report" to="/owner/analytics" />
-            <QuickAction icon={<CalendarPlus className="size-5" />} label="Plan an event" to="/owner/events" />
+            {isAvailable('analytics') && <QuickAction icon={<BarChart3 className="size-5" />} label="Generate report" to="/owner/analytics" />}
+            {isAvailable('events') && <QuickAction icon={<CalendarPlus className="size-5" />} label="Plan an event" to="/owner/events" />}
+            <QuickAction icon={<Building2 className="size-5" />} label="All properties" to="/owner/properties" />
             <QuickAction icon={<Download className="size-5" />} label="Export summary" onClick={doExport} />
           </div>
         </Card>

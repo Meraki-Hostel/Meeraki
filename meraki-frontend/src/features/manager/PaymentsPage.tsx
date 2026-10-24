@@ -34,7 +34,7 @@ export function PaymentsPage() {
   const ds = useDebounced(search).toLowerCase();
   const charges = useQuery(() => services.payments.listCharges({ period: period === 'all' ? undefined : period, status: (status || undefined) as ChargeStatus | undefined }), [period, status]);
   const payments = useQuery(() => services.payments.listPayments({ method: (method || undefined) as PaymentMethod | undefined, from: from || undefined, to: to || undefined }), [method, from, to]);
-  const remind = useMutation((ids: string[]) => services.payments.sendReminders(ids), { success: (n) => `Reminder sent to ${n} resident${n === 1 ? '' : 's'}. In demo mode this is an in-app notification only.`, onSuccess: () => setSelected(new Set()) });
+  const remind = useMutation((ids: string[]) => services.payments.sendReminders(ids), { success: (n) => `In-app reminder posted for ${n} resident${n === 1 ? '' : 's'}. In demo mode this is an in-app notification only.` + ' (no SMS or email is sent)', onSuccess: () => setSelected(new Set()) });
   const chargeRows = useMemo(() => (charges.data ?? []).filter((c) => !ds || `${c.studentName} ${c.studentCode} ${c.roomNumber ?? ''}`.toLowerCase().includes(ds)), [charges.data, ds]);
   const payRows = useMemo(() => (payments.data ?? []).filter((p) => !ds || `${p.studentName} ${p.receiptNo} ${p.reference}`.toLowerCase().includes(ds)), [payments.data, ds]);
 

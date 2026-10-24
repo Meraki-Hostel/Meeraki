@@ -10,6 +10,10 @@ import { GlobalSearch } from './GlobalSearch';
 import { NotificationsMenu } from './NotificationsMenu';
 import { UserMenu } from './UserMenu';
 import { getUiPrefs, setUiPrefs } from '@/services/uiPreferences';
+import { isAvailable } from '@/lib/features';
+
+// Search runs on the server; until that exists the box and Ctrl+K are hidden rather than searching nothing.
+const SEARCH = isAvailable('search');
 
 export function AppShell({ children }: { children?: React.ReactNode }) {
   const { role } = useSession();
@@ -22,7 +26,7 @@ export function AppShell({ children }: { children?: React.ReactNode }) {
   useEffect(() => { window.scrollTo(0, 0); document.getElementById('main')?.focus({ preventScroll: true }); }, [location.pathname]);
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setSearchOpen((o) => !o); }
+      if (SEARCH && (e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') { e.preventDefault(); setSearchOpen((o) => !o); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -60,13 +64,13 @@ export function AppShell({ children }: { children?: React.ReactNode }) {
           <div className="mx-auto flex h-16 max-w-[1440px] items-center gap-2 px-3 sm:px-6">
             <IconButton label="Open navigation" className="lg:hidden" onClick={() => setMobileOpen(true)} aria-expanded={mobileOpen}><Menu className="size-5" /></IconButton>
             <span className="lg:hidden"><BrandLogo compact /></span>
-            <button type="button" onClick={() => setSearchOpen(true)}
+            {SEARCH && <button type="button" onClick={() => setSearchOpen(true)}
               className="ml-1 flex h-10 min-w-0 flex-1 items-center gap-2.5 rounded-xl border border-line bg-cream/80 px-3 text-left text-sm text-mute transition-colors hover:border-line-strong sm:max-w-md md:ml-4"
               aria-label="Open search" aria-keyshortcuts="Control+K Meta+K">
               <Search className="size-4 shrink-0" aria-hidden />
               <span className="truncate">{role === 'student' ? 'Search notices, complaints…' : 'Search students, rooms…'}</span>
               <kbd className="ml-auto hidden rounded-md border border-line bg-white px-1.5 py-0.5 text-[11px] text-dust sm:inline">{isMac ? '⌘' : 'Ctrl'} K</kbd>
-            </button>
+            </button>}
             <div className="ml-auto flex items-center gap-1 sm:gap-2">
               <NotificationsMenu />
               <UserMenu />
@@ -77,7 +81,7 @@ export function AppShell({ children }: { children?: React.ReactNode }) {
           {children ?? <Outlet />}
         </main>
       </div>
-      <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />
+      {SEARCH && <GlobalSearch open={searchOpen} onClose={() => setSearchOpen(false)} />}
     </div>
   );
 }

@@ -8,7 +8,8 @@
     "build": "tsc -b && vite build",
     "typecheck": "tsc -b --noEmit",
     "lint": "eslint .",
-    "preview": "vite preview"
+    "preview": "vite preview",
+    "check:bundle": "node scripts/check-bundle.mjs"
   },
   "dependencies": {
     "@fontsource-variable/figtree": "5.1.1",

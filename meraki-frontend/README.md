@@ -1,6 +1,6 @@
 # Meraki Hostel Management — Frontend
 
-A hostel-management app with three role experiences — **Owner**, **Manager/Warden** and **Student** — built on a typed service layer (`src/services/interfaces.ts`) that runs either against the real API in [`../backend`](../backend) or on an in-memory mock.
+A hostel-management app with three role experiences — **Owner**, **Manager/Warden** and **Student** — built on a typed service layer (`src/services/interfaces.ts`) that talks to the real API in [`../backend`](../backend). It has no demo or offline mode: the clickable mock-data prototype is the separate [`../prototype`](../prototype) app.
 
 ## Quick start
 
@@ -9,60 +9,39 @@ Requires Node.js 18+ (tested on Node 22).
 ```bash
 cd meraki-frontend
 npm install
-cp .env.example .env   # points at the local API; delete the line to run on the mock only
+cp .env.example .env   # points at the local API (required)
 npm run dev            # http://localhost:5173
 ```
 
-### Real API vs mock
+### Talking to the API
 
-`src/services/index.ts` picks the implementation per module:
-
-- **`VITE_API_BASE_URL` set** (e.g. `http://localhost:4000/api/v1`): auth, properties, rooms/beds, students, payments, notifications and activity go through `src/services/http/*` to the backend. Start the backend first (see its README). Demo logins: `owner@demo.com` / `manager@demo.com` / `student@demo.com`, password `meraki@123`.
-- **Not set**: everything runs on the mock (`src/services/mock/*`, persisted to `localStorage`). Nothing is private or secure in this mode.
-
-Modules the backend doesn't have yet (complaints, leave, visitors, maintenance, inventory, staff, announcements, events, feedback, documents, analytics, settings, search) stay on the mock in both modes, showing demo data. `http/mockSessionBridge.ts` keeps them signed in as the demo user with the same role. When a backend module lands, add its adapter under `src/services/http/` and flip that one line in `index.ts`.
+- **`VITE_API_BASE_URL` is required.** `npm run build` fails without it, and a dev server started without it shows a "not configured" screen. There is no fallback to demo data.
+- Auth, properties, rooms/beds, students, payments, notifications and activity go through `src/services/http/*`. Dashboards are composed from those endpoints.
+- If the server can't be reached, screens show an error with a retry, never cached or invented data.
+- Modules without a backend yet (complaints, leave, visitors, maintenance, inventory, staff, notices, events, feedback, documents, analytics trends, settings, plans, search, emergency alerts) are hidden from the menu, show **Not available yet** at their URL, and their services reject with `NOT_IMPLEMENTED` (`src/lib/features.ts`, `src/services/unavailable.ts`).
+- Local logins come from the backend's dev seed (`npm run db:seed` in `backend/`): `owner@demo.com` / `manager@demo.com` / `student@demo.com`, password `meraki@123`. They exist only in a dev database.
 
 | Command | What it does |
 | --- | --- |
 | `npm run dev` | Vite dev server with hot reload |
 | `npm run typecheck` | Strict TypeScript check (no emit) |
 | `npm run lint` | ESLint (bans `any`, `alert()`, `confirm()`) |
-| `npm run build` | Typecheck + production build to `dist/` |
+| `npm run build` | Typecheck + production build to `dist/` (needs `VITE_API_BASE_URL`) |
+| `npm run check:bundle` | After a build: proves `dist/` has no mock code, demo accounts or demo-auth endpoints |
 | `npm run preview` | Serve the production build locally |
 
 **Deploying `dist/`:** this is a single-page app using browser history routing. Configure your host to serve `index.html` for unknown paths (Netlify `_redirects`: `/* /index.html 200`; Nginx: `try_files $uri /index.html;`). `vite preview` already does this.
 
-The app works offline once installed: fonts are bundled locally and all imagery is inline SVG.
+Fonts are bundled locally and all imagery is inline SVG, so no third-party assets are loaded. All data comes from the API.
 
-## Demo accounts
+## Accounts
 
-On `/login`, click any card under **Explore with a demo account**. Alternatively, sign in with email or phone plus the shared demo password **`meraki@123`**. Pick the matching role tab first, or you'll get a "registered as …" message.
+There are no demo accounts in the real app. Accounts live in the backend database:
 
-| Persona | Role | Email | Scope |
-| --- | --- | --- | --- |
-| Pawan Kushwah | Owner | pawan@merakiliving.example | All 5 properties |
-| Mr. Arif Khan | Owner (co-owner) | arif.khan@merakiliving.example | All 5 properties |
-| Anita Desai | Manager | anita.desai@merakiliving.example | Crown Boys Residence |
-| Kavita Rao | Manager | kavita.rao@merakiliving.example | HSD Loyal Girls Hostel (shows scoping) |
-| Rahul Sharma | Student | rahul.sharma@student.example · 98765 43210 | Room 204, Bed B, Crown Boys |
+- **Local development:** `npm run db:seed` in `backend/` creates a demo organization with `owner@demo.com` / `manager@demo.com` / `student@demo.com` (password `meraki@123`) in your dev database only. The seed refuses to run in production.
+- **A real deployment:** `npm run db:seed:prod` in `backend/` creates the first organization and its owner from environment variables.
 
-Switch persona any time from the **account menu** (top right) without losing changes. **Log out** returns you to `/login`.
-
-Other demo states:
-- `/invite/accept?token=demo-invite-2026` shows a valid invitation.
-- `/invite/accept?token=expired-invite` shows an expired one.
-- `/reset-password?token=expired` shows an expired reset link.
-- The Google button only shows a "Demo only" toast.
-
-## Demo data, persistence and reset
-
-- Seed data is generated deterministically by `src/data/fixtures/seed.ts` and fully linked: every bed↔student, payment↔charge and complaint↔room reference is consistent.
-  - Volume: 5 Lucknow properties, 30 rooms, 71 beds, 53 students, 14 staff, 156 rent charges, 139 payments.
-  - Activity: complaints, leave, visitors, maintenance, 47 inventory items, notices, events, feedback, documents, notifications and activity.
-- **Demo clock:** "today" is fixed at **18 Oct 2026** (`src/lib/clock.ts`), so due/overdue states and upcoming lists stay stable whenever you open the demo. Time-of-day follows your real clock.
-- All changes are saved under one versioned key, `meraki-demo-v1`, through `src/services/repository.ts`, the **only** module that touches demo storage. If stored data is unreadable or from another schema version, the seed is restored and a toast explains why.
-- **Reset demo data** is in the account menu and on Owner → Settings. It sits behind a confirmation dialog, restores the seed, and keeps you signed in.
-- Sidebar collapse is a device UI preference stored separately (`meraki-ui-v1`) and is not affected by reset.
+Pick the matching role tab before signing in, or you'll get a "registered as …" message. Password reset and invitations are not available yet (they need email/SMS delivery); ask the hostel office.
 
 ## Route map
 
@@ -74,32 +53,9 @@ Other demo states:
 | Student | `/student/home`, `/student/profile`, `/student/rent`, `/student/complaints`, `/student/leave`, `/student/visitors`, `/student/notices`, `/student/documents`, `/student/feedback`, `/student/emergency` |
 | Shared | `/notifications`, `/profile`, `/help`, `*` (designed 404) |
 
-Every route loads directly and survives refresh. Signed-out visits go to `/login` and come back afterwards. Visiting another role's area goes to `/unauthorized`. Useful deep links: `?id=` on complaints, `?receipt=` on finance and payments, `?new=1` on announcements, maintenance and student complaints, and `?walkin=1` on visitors.
+Routes for modules without a backend (owner analytics, staff, complaints, events, inventory, plans, settings; the manager's complaints, leave, visitors, maintenance, inventory, staff, notices, events, feedback; the student's complaints, leave, visitors, notices, documents, feedback, emergency) are hidden from the menu and show **Not available yet**.
 
-## A 10-minute demo script
-
-1. **Student (Rahul):**
-   - Raise a complaint and request leave.
-   - Request a visitor for today.
-   - On **Rent**, use *Pay now* (simulated; no credentials are ever asked) and open the receipt.
-2. **Switch to Anita (Manager):**
-   - Open the complaint, set *In progress*, assign Deepak and add a note.
-   - Approve the leave.
-   - Approve, then check in the visitor.
-   - Record a payment for another resident.
-   - Publish a notice targeted to *Floor 2*.
-   - Create an event.
-   - Add a student through the 4-step wizard (try a duplicate phone number), then **Transfer** them to another bed.
-3. **Switch back to Rahul:**
-   - The complaint timeline shows Anita's note.
-   - The leave shows *Approved* and the visitor *Checked in*.
-   - The Floor 2 notice and the event appear, and notifications have arrived.
-4. **Switch to Pawan (Owner):**
-   - The complaint is in the portfolio queue and the event is under Events.
-   - Add a property; it appears on the dashboard.
-   - Change Settings and refresh; the change persists.
-   - Press **Ctrl/Cmd + K** to search.
-   - Finally, **Reset demo data**.
+Every route loads directly and survives refresh. Signed-out visits go to `/login` and come back afterwards. Visiting another role's area goes to `/unauthorized`.
 
 ## Architecture
 
@@ -112,49 +68,33 @@ src/
     domain/       ComplaintDrawer/Timeline, Receipt, RecordPayment, BedPicker/AssignBed, ActivityFeed
     brand/        BrandLogo, illustrated CampusScene and PropertyImage (offline SVG)
   features/       auth/, owner/, manager/, student/, shared/, common/ (role-aware boards)
-  data/fixtures/  Catalog + deterministic seed builder
-  services/       interfaces.ts (I*Service contracts), mock/*, repository.ts, errors.ts, index.ts (container)
+  services/       interfaces.ts (I*Service contracts), http/* (API adapters), unavailable.ts, errors.ts, index.ts (container)
   hooks/          useQuery (auto-refresh on data change), useMutation (pending/field errors/toasts), misc
-  lib/            clock, format (₹, en-IN, Asia/Kolkata), validation, CSV export, PRNG
+  lib/            clock (real date, Asia/Kolkata), features (modules with a backend), format, validation, CSV export
   types/          domain.ts — every entity and status enum
 ```
 
-- Pages call `services.*` through `useQuery` / `useMutation`. They never import fixtures or touch storage.
-- Every mock method reads the session and **scopes data by role**:
-  - Owner: all properties.
-  - Manager: only the assigned property.
-  - Student: only their own records. Internal complaint notes are hidden from students.
-- Mock methods validate inputs and throw a typed `ServiceError` (`VALIDATION` with field errors, `NOT_FOUND`, `FORBIDDEN`, `CONFLICT`, `UNAUTHENTICATED`, `EXPIRED`).
-- Mutations append **activity log** entries and **notifications** for the affected roles. Every open screen refreshes automatically.
-- **Backend integration:** implement the interfaces in `src/services/interfaces.ts` with HTTP adapters and swap them in `src/services/index.ts`. Contracts, permissions and state transitions are in [`BACKEND_HANDOFF.md`](./BACKEND_HANDOFF.md).
+- Pages call `services.*` through `useQuery` / `useMutation`. Services are either API adapters or `unavailable(...)` stand-ins that reject with `NOT_IMPLEMENTED`; nothing returns made-up data.
+- Permissions are enforced by the API: owners see only their organization, managers only their property, students only their own records. The UI's role guards are for navigation only.
+- The API validates inputs and returns typed errors (`VALIDATION` with field errors, `NOT_FOUND`, `FORBIDDEN`, `CONFLICT`, `UNAUTHENTICATED`, `EXPIRED`, `NOT_IMPLEMENTED`, `NOT_CONFIGURED`); network failures become `UNAVAILABLE`. Screens show these, never a fake success.
+- After every successful write, open screens refresh automatically.
+- **Adding a module:** build it in `backend/`, add an adapter in `src/services/http/`, swap it in `src/services/index.ts`, and list it in `src/lib/features.ts`.
+
+The previous in-browser mock (demo personas, fixtures, `meraki-demo-v1` storage) was removed. It is preserved in git tag `archive/frontend-mock`; the clickable demo for product evaluation is the separate [`../prototype`](../prototype) app.
 
 **Stack:** React 18, TypeScript (strict), Vite 6, React Router 6, Tailwind CSS 4, Lucide icons, Recharts. Fonts (Fraunces, Figtree) are self-hosted via Fontsource. No component framework.
 
-## Verification performed
+## Verification
 
-- `npm run typecheck`, `npm run lint` and `npm run build` pass with no errors or warnings.
-- **Route smoke test** with headless Chromium against the production build: 78 checks covering every route above, per role plus signed out, via direct navigation (equivalent to refresh). Each renders its page with **0 console or page errors**, and cross-role access redirects to `/unauthorized`.
-- **End-to-end workflow test** of 35 UI-driven steps: the demo script above, plus login validation, the role-mismatch message, the negative-stock block, duplicate-phone detection, occupied beds being unselectable, settings persisting after refresh, and reset.
-- **Responsive scan** of every route at 360, 768, 1024 and 1440 px: no horizontal page overflow. Wide tables scroll inside their own container.
-- **Keyboard checks:**
-  - Visible focus on all controls.
-  - Modals trap focus, close on Escape and return focus to the opener.
-  - Menus and tabs use arrow keys.
-  - Ctrl+K search works by keyboard.
-  - One `h1` per page.
-
-Reproducible browser checks live in [`qa/`](./qa/README.md).
+- `npm run typecheck`, `npm run lint`, `npm run build` and `npm run check:bundle` pass. The bundle check proves the mock layer is gone and that no demo accounts, seed data or demo-auth endpoints are in `dist/`.
+- Browser click-through against the real API (throwaway database): every route for every role loads with no page errors and no failed API calls; unavailable modules show "Not available yet"; no horizontal overflow at 360 px; with the API down, screens say the server can't be reached.
+- The backend has its own test suite (`backend/test`), including role and tenant isolation.
+- `qa/*.py` are the old mock-mode browser checks; they run only against the `archive/frontend-mock` tag.
 
 ## Known limitations
 
-- **Mocked behaviour:**
-  - Authentication: there is one shared demo password, and the reset and invite password steps don't change anything. "Remember me" and session timeout are visual only.
-  - Payments and receipts: pay-now always succeeds, and receipts download as plain text. Printing uses the browser print dialog.
-  - Messages: reminders, invitations, support requests and emergency alerts only create in-app notifications or toasts. No SMS or email is sent, and the emergency page tells students to call 112.
-  - Uploads: only the file name and size are stored; file contents never leave the browser.
-- **Data scope:**
-  - Rent charges exist for Aug–Oct 2026. There is no automatic monthly charge generation; new students get a charge for the current month on admission.
-  - Analytics months before August come from archived monthly snapshots in the seed. Live months are computed from charges and payments.
-- **Owner scope:** owners view residents read-only. Admissions, transfers and payment recording are Manager tasks, matching the spec's role split.
-- **Multi-tab:** two open tabs don't sync live; the last write wins and a refresh shows the latest state.
-- **Not covered by the automated checks:** colour contrast was chosen against WCAG AA but not machine-audited, screen-reader behaviour wasn't tested with real assistive technology, and browsers other than Chromium weren't tested.
+- Online rent payment: Razorpay Checkout is not wired in yet. Students pay at the office and staff record it; a receipt follows.
+- No email or SMS delivery: password reset, invitations and reminders by message are not available. Reminders appear in the app only.
+- Many modules have no backend yet and are hidden (see the route map).
+- Rent dues are not generated automatically each month yet.
+- **Not covered by automated checks:** colour contrast was chosen against WCAG AA but not machine-audited, screen readers weren't tested, and only Chromium was tested.
