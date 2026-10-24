@@ -4,11 +4,16 @@ A frontend-only, high-fidelity prototype for validating the product scope with s
 
 > Kept for product demos and scope validation. The production app is in [`../meraki-frontend`](../meraki-frontend) and [`../backend`](../backend).
 
+**Demo only, fully isolated.** Every person, hostel, payment and message here is fictional. The prototype never calls the Meraki API, never sends anything, and never touches a real database. The real app shares no code with it.
+
 ```bash
 cd prototype
 npm install
-npm run dev        # http://localhost:5173
+npm run dev               # http://localhost:5174 (the real app uses 5173, so both can run at once)
+npm run build && npm run check:isolation   # proves zero network requests
 ```
+
+`check:isolation` checks the source (no network APIs, no imports from the real app or backend), the built files (no API paths), and opens every route in Chromium, failing on any fetch/XHR/WebSocket/event-stream request or any request to another origin. The only third-party request it allows is the Google Fonts stylesheet in `index.html` (typography, never data). It reuses an installed Chromium (or `CHROMIUM_PATH`) and never downloads one.
 
 ## Demo guide
 
