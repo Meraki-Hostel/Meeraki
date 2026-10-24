@@ -1,38 +1,57 @@
 import { prisma } from "../../config/prisma.js";
 import { env } from "../../config/env.js";
-import { invalid, notFound, forbidden, conflict } from "../../utils/ApiError.js";
-import { requireRole, scopeProperty, assertPropertyAccess } from "../../utils/scope.js";
-import { withBalance, iso, todayISO, currentPeriod } from "../../utils/money.js";
+import { invalid, notFound, forbidden, conflict, notConfigured } from "../../utils/ApiError.js";
+import { requireRole, propertyScope, assertPropertyAccess } from "../../utils/scope.js";
+import { withBalance, iso, todayISO, currentPeriod, currentYear, counted } from "../../utils/money.js";
 import { createOrder } from "./payment.gateway.js";
 
 const inr = (n) => `₹${Number(n).toLocaleString("en-IN")}`;
 
 // ── Shared helpers ───────────────────────────────────────────────────────────
-async function lookups() {
-  const [students, properties, rooms] = await Promise.all([
-    prisma.studentProfile.findMany({ select: { id: true, name: true, studentCode: true, roomId: true } }),
-    prisma.property.findMany({ select: { id: true, name: true } }),
-    prisma.room.findMany({ select: { id: true, number: true } }),
+// Display names for exactly the rows being returned (never a scan of every tenant's data).
+async function lookupsFor(rows) {
+  const studentIds = [...new Set(rows.map((r) => r.studentId))];
+  const propertyIds = [...new Set(rows.map((r) => r.propertyId))];
+  const [students, properties] = await Promise.all([
+    prisma.studentProfile.findMany({ where: { id: { in: studentIds } }, select: { id: true, name: true, studentCode: true, roomId: true } }),
+    prisma.property.findMany({ where: { id: { in: propertyIds } }, select: { id: true, name: true } }),
   ]);
-  const sById = new Map(students.map((s) => [s.id, s]));
-  const pById = new Map(properties.map((p) => [p.id, p.name]));
-  const rById = new Map(rooms.map((r) => [r.id, r.number]));
-  return { sById, pById, rById };
+  const roomIds = [...new Set(students.map((st) => st.roomId).filter(Boolean))];
+  const rooms = roomIds.length ? await prisma.room.findMany({ where: { id: { in: roomIds } }, select: { id: true, number: true } }) : [];
+  return {
+    sById: new Map(students.map((st) => [st.id, st])),
+    pById: new Map(properties.map((p) => [p.id, p.name])),
+    rById: new Map(rooms.map((r) => [r.id, r.number])),
+  };
 }
 
-// Receipt sequence via an atomic counter inside a transaction.
+// Receipt sequence via an atomic counter inside a transaction. A single
+// INSERT … ON CONFLICT is safe even when the counter row does not exist yet
+// (an upsert's read-then-insert is not).
 async function nextReceiptNo(tx) {
-  const c = await tx.counter.upsert({
-    where: { key: "receipt" },
-    update: { value: { increment: 1 } },
-    create: { key: "receipt", value: 1 },
-  });
-  return `RCPT-${new Date().getFullYear()}-${String(c.value).padStart(4, "0")}`;
+  const [{ value }] = await tx.$queryRaw`
+    INSERT INTO "Counter" ("key", "value") VALUES ('receipt', 1)
+    ON CONFLICT ("key") DO UPDATE SET "value" = "Counter"."value" + 1
+    RETURNING "value"`;
+  return `RCPT-${currentYear()}-${String(Number(value)).padStart(4, "0")}`;
+}
+
+// Serialises every write against one charge (record, pay-now, webhook), so two
+// payments can never both pass the balance check.
+async function lockCharge(tx, chargeId) {
+  await tx.$queryRaw`SELECT "id" FROM "RentCharge" WHERE "id" = ${chargeId} FOR UPDATE`;
+  return tx.rentCharge.findUnique({ where: { id: chargeId } });
+}
+
+async function balanceOf(tx, charge) {
+  const paid = await tx.payment.findMany({ where: { chargeId: charge.id, ...counted }, select: { chargeId: true, amount: true } });
+  return withBalance(charge, paid, todayISO()).balance;
 }
 
 async function logActivity(tx, auth, actorName, category, message, propertyId, link) {
+  const orgId = propertyId ? (await tx.property.findUnique({ where: { id: propertyId }, select: { orgId: true } })).orgId : auth.orgId;
   await tx.activityLog.create({
-    data: { propertyId, actorName, actorRole: auth?.role ?? "system", category, message, link },
+    data: { orgId, propertyId, actorName, actorRole: auth?.role ?? "system", category, message, link },
   });
 }
 async function notifyStudentUsers(tx, studentId, title, body, category, link) {
@@ -44,7 +63,9 @@ async function notifyStudentUsers(tx, studentId, title, body, category, link) {
 }
 async function notifyStaffUsers(tx, propertyId, title, body, category, managerLink, ownerLink) {
   const mgrs = await tx.user.findMany({ where: { role: "manager", propertyId }, select: { id: true } });
-  const owners = ownerLink ? await tx.user.findMany({ where: { role: "owner" }, select: { id: true } }) : [];
+  const owners = ownerLink
+    ? await tx.user.findMany({ where: { role: "owner", org: { properties: { some: { id: propertyId } } } }, select: { id: true } })
+    : [];
   const rows = [
     ...mgrs.map((u) => ({ recipientUserId: u.id, title, body, category, link: managerLink })),
     ...owners.map((u) => ({ recipientUserId: u.id, title, body, category, link: ownerLink })),
@@ -53,11 +74,11 @@ async function notifyStaffUsers(tx, propertyId, title, body, category, managerLi
 }
 
 // Inserts a Payment row + receipt number. Caller supplies the resolved amount.
-async function insertPayment(tx, auth, actorName, { chargeId, studentId, propertyId, amount, method, paidOn, reference, note, gatewayOrderId, gatewayPaymentId }) {
+async function insertPayment(tx, auth, actorName, { chargeId, studentId, propertyId, amount, method, paidOn, reference, note, gatewayOrderId, gatewayPaymentId, status = "captured" }) {
   const receiptNo = await nextReceiptNo(tx);
   return tx.payment.create({
     data: {
-      chargeId, studentId, propertyId, amount, method,
+      chargeId, studentId, propertyId, amount, method, status,
       paidOn: new Date(paidOn), reference: reference || `DEMO${Date.now().toString().slice(-8)}`,
       receiptNo, recordedBy: actorName, note: note || null,
       gatewayOrderId: gatewayOrderId || null, gatewayPaymentId: gatewayPaymentId || null,
@@ -66,25 +87,24 @@ async function insertPayment(tx, auth, actorName, { chargeId, studentId, propert
 }
 
 // Charges a given auth can see, scoped like the frontend.
-function chargeScopeWhere(auth, propertyId) {
+async function chargeScopeWhere(auth, propertyId) {
   if (auth.role === "student") return { studentId: auth.studentId };
-  const pid = scopeProperty(auth, propertyId);
-  return pid ? { propertyId: pid } : {};
+  return propertyScope(auth, propertyId);
 }
 
 // ── Reads ────────────────────────────────────────────────────────────────────
 export async function listCharges(auth, filters = {}) {
-  const where = { ...chargeScopeWhere(auth, filters.propertyId) };
+  const where = { ...(await chargeScopeWhere(auth, filters.propertyId)) };
   if (filters.studentId) where.studentId = filters.studentId;
   if (filters.period) where.period = filters.period;
 
   const charges = await prisma.rentCharge.findMany({ where });
   const payments = await prisma.payment.findMany({
-    where: { chargeId: { in: charges.map((c) => c.id) } },
+    where: { chargeId: { in: charges.map((c) => c.id) }, ...counted },
     select: { chargeId: true, amount: true },
   });
   const today = todayISO();
-  const { sById, pById, rById } = await lookups();
+  const { sById, pById, rById } = await lookupsFor(charges);
 
   return charges
     .map((c) => withBalance(c, payments, today))
@@ -102,19 +122,17 @@ export async function listCharges(auth, filters = {}) {
 }
 
 export async function listPayments(auth, filters = {}) {
-  const where = {};
+  const where = { ...counted }; // open or failed gateway attempts are not payments
   if (auth.role === "student") where.studentId = auth.studentId;
-  else {
-    const pid = scopeProperty(auth, filters.propertyId);
-    if (pid) where.propertyId = pid;
-  }
-  if (filters.studentId) where.studentId = filters.studentId;
+  else Object.assign(where, await propertyScope(auth, filters.propertyId));
+  if (filters.studentId && auth.role !== "student") where.studentId = filters.studentId;
   if (filters.method) where.method = filters.method;
 
   const payments = await prisma.payment.findMany({ where });
-  const { sById, pById } = await lookups();
+  const { sById, pById } = await lookupsFor(payments);
   const chargePeriods = new Map(
-    (await prisma.rentCharge.findMany({ select: { id: true, period: true } })).map((c) => [c.id, c.period])
+    (await prisma.rentCharge.findMany({ where: { id: { in: [...new Set(payments.map((p) => p.chargeId))] } }, select: { id: true, period: true } }))
+      .map((c) => [c.id, c.period]),
   );
 
   return payments
@@ -132,13 +150,13 @@ export async function listPayments(auth, filters = {}) {
 }
 
 export async function summary(auth, filters = {}) {
-  const where = { ...chargeScopeWhere(auth, filters.propertyId) };
+  const where = { ...(await chargeScopeWhere(auth, filters.propertyId)) };
   const period = filters.period ?? currentPeriod();
   if (period !== "all") where.period = period;
 
   const charges = await prisma.rentCharge.findMany({ where });
   const payments = await prisma.payment.findMany({
-    where: { chargeId: { in: charges.map((c) => c.id) } },
+    where: { chargeId: { in: charges.map((c) => c.id) }, ...counted },
     select: { chargeId: true, amount: true },
   });
   const today = todayISO();
@@ -159,9 +177,9 @@ export async function summary(auth, filters = {}) {
 
 export async function getReceipt(auth, paymentId) {
   const p = await prisma.payment.findUnique({ where: { id: paymentId } });
-  if (!p) throw notFound("Receipt");
+  if (!p || !["captured", "simulated"].includes(p.status)) throw notFound("Receipt"); // no receipt for money not received
   if (auth.role === "student" && p.studentId !== auth.studentId) throw forbidden();
-  if (auth.role !== "student") assertPropertyAccess(auth, p.propertyId);
+  if (auth.role !== "student") await assertPropertyAccess(auth, p.propertyId);
 
   const [charge, student, property] = await Promise.all([
     prisma.rentCharge.findUnique({ where: { id: p.chargeId } }),
@@ -184,22 +202,21 @@ export async function getReceipt(auth, paymentId) {
 // ── Writes ───────────────────────────────────────────────────────────────────
 export async function recordPayment(auth, actorName, input) {
   requireRole(auth, "owner", "manager");
-  const charge = await prisma.rentCharge.findUnique({ where: { id: input.chargeId } });
-  if (!charge) throw invalid({ chargeId: "Choose a due to pay against" });
-  assertPropertyAccess(auth, charge.propertyId);
-
-  const existing = await prisma.payment.findMany({ where: { chargeId: charge.id }, select: { chargeId: true, amount: true } });
-  const { balance } = withBalance(charge, existing, todayISO());
+  const found = await prisma.rentCharge.findUnique({ where: { id: input.chargeId } });
+  if (!found) throw invalid({ chargeId: "Choose a due to pay against" });
+  await assertPropertyAccess(auth, found.propertyId);
 
   const e = {};
   if (!(input.amount > 0)) e.amount = "Amount must be greater than zero";
-  else if (input.amount > balance) e.amount = `Amount cannot exceed the balance of ${inr(balance)}`;
   if (!input.paidOn) e.paidOn = "Payment date is required";
   else if (input.paidOn > todayISO()) e.paidOn = "Payment date cannot be in the future";
   if (input.method !== "cash" && !input.reference.trim()) e.reference = "Reference / UTR is required for non-cash payments";
   if (Object.keys(e).length) throw invalid(e);
 
   const created = await prisma.$transaction(async (tx) => {
+    const charge = await lockCharge(tx, found.id);
+    const balance = await balanceOf(tx, charge);
+    if (input.amount > balance) throw invalid({ amount: `Amount cannot exceed the balance of ${inr(balance)}` });
     const p = await insertPayment(tx, auth, actorName, {
       chargeId: charge.id, studentId: charge.studentId, propertyId: charge.propertyId,
       amount: input.amount, method: input.method, paidOn: input.paidOn,
@@ -217,7 +234,7 @@ export async function sendReminders(auth, actorName, chargeIds) {
   requireRole(auth, "owner", "manager");
   if (!chargeIds.length) throw invalid({ chargeIds: "Select at least one due" });
   const charges = await prisma.rentCharge.findMany({ where: { id: { in: chargeIds } } });
-  const payments = await prisma.payment.findMany({ where: { chargeId: { in: chargeIds } }, select: { chargeId: true, amount: true } });
+  const payments = await prisma.payment.findMany({ where: { chargeId: { in: chargeIds }, ...counted }, select: { chargeId: true, amount: true } });
   const today = todayISO();
 
   let count = 0;
@@ -235,66 +252,130 @@ export async function sendReminders(auth, actorName, chargeIds) {
 }
 
 // payNow: student self-service online payment.
-// - simulated mode: posts a completed payment immediately (mirrors the frontend demo).
-// - razorpay mode: creates an Order and returns it; the actual Payment row is
-//   created by the verified webhook (see confirmWebhookPayment). The frontend
-//   should then use Razorpay Checkout with the returned order.
+// - disabled (default): online payment is not set up → NOT_CONFIGURED. Staff record payments.
+// - simulated (local development only; production refuses to start with it):
+//   records a "simulated" payment, clearly labelled, no money moved.
+// - razorpay: creates (or reuses) a gateway Order and returns it as pending.
+//   Nothing counts as paid until the signed webhook confirms the capture.
 export async function payNow(auth, actorName, chargeId, method) {
   requireRole(auth, "student");
   const charge = await prisma.rentCharge.findUnique({ where: { id: chargeId } });
   if (!charge) throw notFound("Due");
   if (charge.studentId !== auth.studentId) throw forbidden();
-  const existing = await prisma.payment.findMany({ where: { chargeId: charge.id }, select: { chargeId: true, amount: true } });
-  const { balance } = withBalance(charge, existing, todayISO());
-  if (balance <= 0) throw conflict("This due is already paid.");
+  const gatewayMethod = method === "netbanking" ? "bank_transfer" : method;
+
+  if (env.payments.mode === "disabled") {
+    throw notConfigured("Online payment is not set up for your hostel yet. Pay at the office and the manager will record it.");
+  }
 
   if (env.payments.mode === "razorpay") {
+    const balance = await balanceOf(prisma, charge);
+    if (balance <= 0) throw conflict("This due is already paid.");
+
+    // Reuse the open order when it is still for the right amount.
+    const open = await prisma.payment.findFirst({ where: { chargeId: charge.id, status: "pending" } });
+    if (open && open.amount === balance) return pendingResponse(open.gatewayOrderId, balance);
+    if (open) await prisma.payment.updateMany({ where: { id: open.id, status: "pending" }, data: { status: "failed", note: "Superseded: balance changed before payment" } });
+
     const order = await createOrder({
       amountRupees: balance,
       receipt: `charge_${charge.id}`,
       notes: { chargeId: charge.id, studentId: charge.studentId, propertyId: charge.propertyId, method },
     });
-    // Persist the pending order so the webhook can reconcile idempotently.
-    await prisma.payment.create({
-      data: {
-        chargeId: charge.id, studentId: charge.studentId, propertyId: charge.propertyId,
-        amount: balance, method: method === "netbanking" ? "bank_transfer" : method,
-        paidOn: new Date(), reference: `PENDING_${order.id}`, receiptNo: `PENDING-${order.id}`,
-        recordedBy: actorName, note: "Awaiting gateway confirmation", gatewayOrderId: order.id,
-      },
-    });
-    return { pending: true, order, keyId: env.payments.razorpayKeyId };
+    try {
+      await prisma.payment.create({
+        data: {
+          chargeId: charge.id, studentId: charge.studentId, propertyId: charge.propertyId, status: "pending",
+          amount: balance, method: gatewayMethod, paidOn: new Date(todayISO()),
+          reference: `PENDING_${order.id}`, receiptNo: `PENDING-${order.id}`,
+          recordedBy: actorName, note: "Awaiting gateway confirmation", gatewayOrderId: order.id,
+        },
+      });
+    } catch (err) {
+      // A concurrent pay-now opened an order first (one pending order per charge): use that one.
+      if (err?.code !== "P2002") throw err;
+      const winner = await prisma.payment.findFirst({ where: { chargeId: charge.id, status: "pending" } });
+      if (!winner) throw err;
+      return pendingResponse(winner.gatewayOrderId, winner.amount);
+    }
+    return pendingResponse(order.id, balance);
   }
 
-  // Simulated mode (default) — matches the frontend mock exactly.
+  // Simulated mode (local development only).
   const created = await prisma.$transaction(async (tx) => {
+    const locked = await lockCharge(tx, charge.id);
+    const balance = await balanceOf(tx, locked);
+    if (balance <= 0) throw conflict("This due is already paid.");
     const p = await insertPayment(tx, auth, actorName, {
-      chargeId: charge.id, studentId: charge.studentId, propertyId: charge.propertyId,
-      amount: balance, method: method === "netbanking" ? "bank_transfer" : method,
-      paidOn: todayISO(), reference: `SIM${Date.now().toString().slice(-9)}`, note: "Simulated online payment (demo)",
+      chargeId: charge.id, studentId: charge.studentId, propertyId: charge.propertyId, status: "simulated",
+      amount: balance, method: gatewayMethod, paidOn: todayISO(),
+      reference: `SIM${Date.now().toString().slice(-9)}`, note: "Simulated online payment (demo, no money moved)",
     });
-    await logActivity(tx, auth, actorName, "payment", `${actorName} paid ${inr(balance)} online (simulated)`, charge.propertyId, `/manager/students/${charge.studentId}`);
-    await notifyStaffUsers(tx, charge.propertyId, "Online payment received", `${actorName} paid ${inr(balance)} (simulated).`, "payment", "/manager/payments", "/owner/finance");
-    await notifyStudentUsers(tx, charge.studentId, "Payment successful", `${inr(balance)} paid. Receipt ${p.receiptNo}.`, "payment", "/student/rent");
+    await logActivity(tx, auth, actorName, "payment", `${actorName} paid ${inr(balance)} online (simulated, no money moved)`, charge.propertyId, `/manager/students/${charge.studentId}`);
+    await notifyStaffUsers(tx, charge.propertyId, "Simulated payment", `${actorName} paid ${inr(balance)} (simulated, no money moved).`, "payment", "/manager/payments", "/owner/finance");
+    await notifyStudentUsers(tx, charge.studentId, "Simulated payment recorded", `${inr(balance)} (simulated, no money moved). Receipt ${p.receiptNo}.`, "payment", "/student/rent");
     return p;
   });
   return { ...created, paidOn: iso(created.paidOn) };
 }
 
-// Called by the verified Razorpay webhook. Idempotent on gatewayOrderId.
-export async function confirmWebhookPayment({ orderId, gatewayPaymentId }) {
-  const pending = await prisma.payment.findUnique({ where: { gatewayOrderId: orderId } });
-  if (!pending) return { ignored: true }; // unknown order
-  if (!pending.receiptNo.startsWith("PENDING-")) return { alreadyConfirmed: true };
+function pendingResponse(orderId, amountRupees) {
+  return {
+    pending: true,
+    order: { id: orderId, amount: Math.round(amountRupees * 100), currency: "INR" },
+    keyId: env.payments.razorpayKeyId,
+  };
+}
 
-  await prisma.$transaction(async (tx) => {
+// Called only after the webhook signature has been verified. Idempotent: a replay,
+// or a concurrent delivery of the same event, confirms the payment at most once.
+// The captured amount and currency must match the order exactly; anything else is
+// left pending and flagged for staff instead of being guessed at.
+export async function confirmWebhookPayment({ orderId, gatewayPaymentId, amountPaise, currency }) {
+  const pending = orderId ? await prisma.payment.findUnique({ where: { gatewayOrderId: orderId } }) : null;
+  if (!pending) return { ignored: "unknown order" };
+  if (pending.status === "captured") return { alreadyConfirmed: true };
+  if (pending.status !== "pending") return { ignored: `payment is ${pending.status}` };
+
+  if (currency !== "INR" || amountPaise !== Math.round(pending.amount * 100)) {
+    await prisma.payment.updateMany({
+      where: { id: pending.id, status: "pending" },
+      data: { note: `Needs review: gateway reported ${amountPaise} ${currency}, order was ${Math.round(pending.amount * 100)} INR` },
+    });
+    await prisma.$transaction(async (tx) => {
+      await notifyStaffUsers(tx, pending.propertyId, "Online payment needs review", `Gateway amount did not match order ${orderId}. Not credited.`, "payment", "/manager/payments", "/owner/finance");
+    });
+    return { mismatch: true };
+  }
+
+  return prisma.$transaction(async (tx) => {
+    // The charge lock serialises concurrent deliveries; re-read after taking it.
+    const charge = await lockCharge(tx, pending.chargeId);
+    const fresh = await tx.payment.findUnique({ where: { id: pending.id } });
+    if (fresh.status !== "pending") return { alreadyConfirmed: true };
+    // Money was received, so it is always credited; if staff recorded a payment in
+    // the meantime this overpays, which is flagged for a refund decision.
+    const overpaid = pending.amount > (await balanceOf(tx, charge));
     const receiptNo = await nextReceiptNo(tx);
     await tx.payment.update({
       where: { id: pending.id },
-      data: { receiptNo, reference: gatewayPaymentId || pending.reference, gatewayPaymentId, note: "Online payment (Razorpay)" },
+      data: {
+        status: "captured", receiptNo, reference: gatewayPaymentId || pending.reference, gatewayPaymentId, paidOn: new Date(todayISO()),
+        note: overpaid ? "Online payment (Razorpay). OVERPAID: the due was already settled; review for refund." : "Online payment (Razorpay)",
+      },
     });
     await notifyStudentUsers(tx, pending.studentId, "Payment successful", `${inr(pending.amount)} paid. Receipt ${receiptNo}.`, "payment", "/student/rent");
     await notifyStaffUsers(tx, pending.propertyId, "Online payment received", `${inr(pending.amount)} paid online.`, "payment", "/manager/payments", "/owner/finance");
+    return { confirmed: true };
   });
-  return { confirmed: true };
+}
+
+// The gateway reported a failed attempt: close the order so the student can retry.
+export async function failWebhookPayment({ orderId }) {
+  if (!orderId) return { ignored: "no order" };
+  const { count } = await prisma.payment.updateMany({
+    where: { gatewayOrderId: orderId, status: "pending" },
+    data: { status: "failed", note: "Gateway reported the payment failed" },
+  });
+  return count ? { failed: true } : { ignored: "not pending" };
 }

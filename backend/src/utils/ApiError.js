@@ -7,6 +7,10 @@ const STATUS = {
   CONFLICT: 409,
   UNAUTHENTICATED: 401,
   EXPIRED: 410,
+  // The feature is not built yet / the integration it needs is not set up. The
+  // frontend shows an "unavailable" state; nothing may pretend it succeeded.
+  NOT_IMPLEMENTED: 501,
+  NOT_CONFIGURED: 503,
 };
 
 export class ApiError extends Error {
@@ -26,4 +30,8 @@ export const forbidden = (message = "You do not have access to this record.") =>
 export const conflict = (message = "Conflict") => new ApiError("CONFLICT", message);
 export const unauthenticated = (message = "Your session has ended. Sign in again.") =>
   new ApiError("UNAUTHENTICATED", message);
+export const notImplemented = (message = "This feature is not available yet.") =>
+  new ApiError("NOT_IMPLEMENTED", message);
+export const notConfigured = (message = "This feature needs to be set up by the administrator.") =>
+  new ApiError("NOT_CONFIGURED", message);
 export const expired = (message = "This link has expired.") => new ApiError("EXPIRED", message);

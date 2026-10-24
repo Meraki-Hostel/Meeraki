@@ -1,5 +1,6 @@
 import { prisma } from "../../config/prisma.js";
 import { iso } from "../../utils/money.js";
+import { assertPropertyAccess } from "../../utils/scope.js";
 
 export async function listNotifications(auth, filters = {}) {
   const where = { recipientUserId: auth.userId };
@@ -16,13 +17,14 @@ export async function markAllNotificationsRead(auth) {
 }
 
 export async function listActivity(auth, filters = {}) {
-  const where = {};
+  const where = { orgId: auth.orgId };
   if (auth.role !== "owner") where.propertyId = auth.propertyId;
-  else if (filters.propertyId) where.propertyId = filters.propertyId;
+  else if (filters.propertyId) { await assertPropertyAccess(auth, filters.propertyId); where.propertyId = filters.propertyId; }
   if (filters.category) where.category = filters.category;
   const rows = await prisma.activityLog.findMany({
     where, orderBy: { createdAt: "desc" }, take: Number(filters.limit) || 50,
   });
-  const props = new Map((await prisma.property.findMany({ select: { id: true, name: true } })).map((p) => [p.id, p.name]));
+  const ids = [...new Set(rows.map((a) => a.propertyId).filter(Boolean))];
+  const props = new Map((await prisma.property.findMany({ where: { id: { in: ids } }, select: { id: true, name: true } })).map((p) => [p.id, p.name]));
   return rows.map((a) => ({ ...a, createdAt: a.createdAt.toISOString(), propertyName: a.propertyId ? props.get(a.propertyId) : undefined }));
 }

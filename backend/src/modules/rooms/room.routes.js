@@ -4,7 +4,8 @@ import { authenticate } from "../../middleware/authenticate.js";
 import { validate } from "../../middleware/validate.js";
 import { createSchema, updateSchema, listSchema, bedStatusSchema, assignSchema, vacateSchema } from "./room.validation.js";
 const r = Router();
-r.use(authenticate);
+// Mounted at "/": authenticate only this router's own paths, so unknown URLs reach the 404 handler.
+r.use(["/rooms", "/beds"], authenticate);
 r.get("/rooms", validate(listSchema, "query"), c.list);
 r.post("/rooms", validate(createSchema), c.create);
 r.patch("/rooms/:id", validate(updateSchema), c.update);

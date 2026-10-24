@@ -6,7 +6,6 @@ export const loginSchema = z.object({
   password: z.string().min(1, "Enter your password"),
   remember: z.boolean().optional().default(false),
 });
-export const loginAsSchema = z.object({ userId: z.string().min(1) });
 export const refreshSchema = z.object({ refreshToken: z.string().min(1) });
 export const forgotSchema = z.object({ identifier: z.string().min(1) });
 export const resetSchema = z.object({ token: z.string().min(1), password: z.string() });

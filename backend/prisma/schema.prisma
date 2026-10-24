@@ -93,10 +93,40 @@ enum PaymentMethod {
   card
 }
 
+// pending   = gateway order created, money not confirmed (never counted)
+// captured  = money received: recorded by staff, or confirmed by the signed gateway webhook
+// failed    = gateway reported failure / order abandoned (never counted)
+// simulated = local-development "payment" with no money moved (PAYMENT_MODE=simulated,
+//             refused in production). Counted so the demo flow works, always labelled.
+enum PaymentStatus {
+  pending
+  captured
+  failed
+  simulated
+}
+
 enum InvitationStatus {
   pending
   accepted
   expired
+}
+
+// ── Tenancy ──────────────────────────────────────────────────────────────────
+// One operating business. Owners see every property of THEIR organization only;
+// managers and students are tied to one property inside it. The composite
+// relations (propertyId, orgId) → Property(id, orgId) make the database reject a
+// user, staff member, invitation or activity row whose org differs from its property's.
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users       User[]
+  properties  Property[]
+  staff       StaffMember[]
+  invitations Invitation[]
+  activity    ActivityLog[]
 }
 
 // ── Identity ─────────────────────────────────────────────────────────────────
@@ -106,6 +136,7 @@ model User {
   email       String  @unique
   phone       String
   role        Role
+  orgId       String
   title       String  @default("")
   passwordHash String
   // Links mirrored from domain.ts User
@@ -118,9 +149,12 @@ model User {
 
   refreshTokens RefreshToken[]
   student       StudentProfile? @relation(fields: [studentId], references: [id])
+  org           Organization    @relation(fields: [orgId], references: [id])
+  property      Property?       @relation(fields: [propertyId, orgId], references: [id, orgId], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([role])
   @@index([propertyId])
+  @@index([orgId])
 }
 
 model RefreshToken {
@@ -140,16 +174,23 @@ model Invitation {
   name      String
   email     String
   role      String // Role | 'staff'
+  orgId     String
   propertyId String?
   invitedBy String
   status    InvitationStatus @default(pending)
   expiresAt DateTime
   createdAt DateTime         @default(now())
+
+  org      Organization @relation(fields: [orgId], references: [id])
+  property Property?    @relation(fields: [propertyId, orgId], references: [id, orgId], onDelete: NoAction, onUpdate: NoAction)
+
+  @@index([orgId])
 }
 
 // ── Property / rooms / beds ──────────────────────────────────────────────────
 model Property {
   id            String         @id @default(uuid())
+  orgId         String
   name          String
   code          String         @unique
   type          PropertyType
@@ -172,8 +213,15 @@ model Property {
   students StudentProfile[]
   charges  RentCharge[]
   payments Payment[]
+  org         Organization  @relation(fields: [orgId], references: [id])
+  users       User[]
+  staff       StaffMember[]
+  invitations Invitation[]
+  activity    ActivityLog[]
 
+  @@unique([id, orgId]) // target of the same-org composite relations
   @@index([status])
+  @@index([orgId])
 }
 
 model Room {
@@ -258,6 +306,7 @@ model StaffMember {
   id         String      @id @default(uuid())
   name       String
   role       StaffRole
+  orgId      String
   propertyId String?
   phone      String
   email      String
@@ -267,7 +316,11 @@ model StaffMember {
   createdAt  DateTime    @default(now())
   updatedAt  DateTime    @updatedAt
 
+  org      Organization @relation(fields: [orgId], references: [id])
+  property Property?    @relation(fields: [propertyId, orgId], references: [id, orgId], onDelete: NoAction, onUpdate: NoAction)
+
   @@index([propertyId])
+  @@index([orgId])
 }
 
 // ── Money ────────────────────────────────────────────────────────────────────
@@ -299,6 +352,7 @@ model Payment {
   paidOn     DateTime
   reference  String
   receiptNo  String        @unique
+  status     PaymentStatus
   recordedBy String
   note       String?
   // Set for online (gateway) payments; lets webhooks reconcile idempotently.
@@ -312,6 +366,9 @@ model Payment {
 
   @@index([propertyId, paidOn])
   @@index([studentId])
+  @@index([chargeId, status])
+  // Also in SQL only (Prisma cannot express it): unique partial index
+  // "Payment_one_pending_per_charge" on (chargeId) WHERE status = 'pending'.
 }
 
 // Named counters (e.g. receipt sequence) incremented inside transactions.
@@ -336,6 +393,7 @@ model Notification {
 
 model ActivityLog {
   id         String   @id @default(uuid())
+  orgId      String
   propertyId String?
   actorName  String
   actorRole  String
@@ -344,6 +402,10 @@ model ActivityLog {
   link       String?
   createdAt  DateTime @default(now())
 
+  org      Organization @relation(fields: [orgId], references: [id])
+  property Property?    @relation(fields: [propertyId, orgId], references: [id, orgId], onDelete: NoAction, onUpdate: NoAction)
+
   @@index([propertyId])
   @@index([createdAt])
+  @@index([orgId])
 }

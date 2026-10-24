@@ -1,13 +1,20 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 
+// Demo data uses a shared, publicly documented password. Never run it against production.
+if (process.env.NODE_ENV === "production") {
+  console.error("Refusing to run the demo seed with NODE_ENV=production. Use `npm run db:seed:prod` to create the first owner.");
+  process.exit(1);
+}
+
 const prisma = new PrismaClient();
 const DEMO_PASSWORD = process.env.DEMO_PASSWORD || "meraki@123";
 
 function monthsAgoPeriod(n) {
+  // Whole-month arithmetic: Date#setMonth overflows (31 Mar - 1 month lands in March).
   const d = new Date();
-  d.setMonth(d.getMonth() - n);
-  return d.toISOString().slice(0, 7);
+  const idx = d.getUTCFullYear() * 12 + d.getUTCMonth() - n;
+  return `${Math.floor(idx / 12)}-${String((idx % 12) + 1).padStart(2, "0")}`;
 }
 function dueDateFor(period, day = 5) {
   return new Date(`${period}-${String(day).padStart(2, "0")}T00:00:00.000Z`);
@@ -16,9 +23,11 @@ function dueDateFor(period, day = 5) {
 async function main() {
   const passwordHash = await bcrypt.hash(DEMO_PASSWORD, 12);
 
+  const org = await prisma.organization.create({ data: { name: "Demo Hostels" } });
+
   const property = await prisma.property.create({
     data: {
-      name: "Crown Residency", code: "CROWN", type: "coed", status: "active",
+      orgId: org.id, name: "Crown Residency", code: "CROWN", type: "coed", status: "active",
       city: "Gurugram", locality: "Sector 45", address: "Plot 12, Sector 45, Gurugram",
       pincode: "122003", phone: "9876500000", baseRent: 9500, amenities: ["wifi", "laundry", "mess"],
       openedOn: new Date("2024-06-01"), imageVariant: 1,
@@ -26,7 +35,7 @@ async function main() {
   });
 
   const manager = await prisma.staffMember.create({
-    data: { name: "Priya Menon", role: "manager", propertyId: property.id, phone: "9876500001", email: "priya@crown.in", shift: "general", status: "active", joinedOn: new Date("2024-06-05") },
+    data: { orgId: org.id, name: "Priya Menon", role: "manager", propertyId: property.id, phone: "9876500001", email: "priya@crown.in", shift: "general", status: "active", joinedOn: new Date("2024-06-05") },
   });
   await prisma.property.update({ where: { id: property.id }, data: { managerStaffId: manager.id } });
 
@@ -49,9 +58,9 @@ async function main() {
   await prisma.bed.update({ where: { id: bedA.id }, data: { status: "occupied", studentId: student.id } });
 
   // Users (one per persona) — all use the demo password.
-  await prisma.user.create({ data: { name: "Owner Admin", email: "owner@demo.com", phone: "9876500020", role: "owner", title: "Founder", passwordHash } });
-  await prisma.user.create({ data: { name: "Priya Menon", email: "manager@demo.com", phone: "9876500001", role: "manager", title: "Property Manager", propertyId: property.id, staffId: manager.id, passwordHash } });
-  await prisma.user.create({ data: { name: "Aarav Sharma", email: "student@demo.com", phone: "9876500010", role: "student", title: "Resident", propertyId: property.id, studentId: student.id, passwordHash } });
+  await prisma.user.create({ data: { orgId: org.id, name: "Owner Admin", email: "owner@demo.com", phone: "9876500020", role: "owner", title: "Founder", passwordHash } });
+  await prisma.user.create({ data: { orgId: org.id, name: "Priya Menon", email: "manager@demo.com", phone: "9876500001", role: "manager", title: "Property Manager", propertyId: property.id, staffId: manager.id, passwordHash } });
+  await prisma.user.create({ data: { orgId: org.id, name: "Aarav Sharma", email: "student@demo.com", phone: "9876500010", role: "student", title: "Resident", propertyId: property.id, studentId: student.id, passwordHash } });
 
   // Rent charges: last month (unpaid → overdue) and this month (unpaid). Lets
   // the student "Pay now" and staff "Record payment" immediately.

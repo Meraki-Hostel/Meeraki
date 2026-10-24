@@ -1,9 +1,12 @@
+import { randomUUID } from "node:crypto";
 import { prisma } from "../../config/prisma.js";
-import { env } from "../../config/env.js";
-import { invalid, notFound, forbidden, unauthenticated, expired, conflict } from "../../utils/ApiError.js";
+import { invalid, notFound, forbidden, unauthenticated, expired, conflict, notImplemented, notConfigured } from "../../utils/ApiError.js";
 import { verifyPassword, hashPassword } from "../../utils/password.js";
 import { signAccessToken, generateRefreshToken, hashToken } from "../../utils/tokens.js";
 import { isEmail, isIndianPhone, normalizePhone } from "../../utils/validators.js";
+
+// A real bcrypt hash of a random string, compared against when the account does not exist.
+const DUMMY_HASH = await hashPassword(randomUUID());
 
 // Shape a User row into the frontend's User type (drops passwordHash).
 function toUser(u) {
@@ -14,38 +17,20 @@ function toUser(u) {
   };
 }
 
-async function issueTokens(user, method) {
-  const accessToken = signAccessToken({
-    userId: user.id, role: user.role, propertyId: user.propertyId, studentId: user.studentId, method,
-  });
+async function issueTokens(user) {
+  const accessToken = signAccessToken({ userId: user.id, role: user.role });
   const { raw, hash, expiresAt } = generateRefreshToken();
   await prisma.refreshToken.create({ data: { userId: user.id, tokenHash: hash, expiresAt } });
   return { accessToken, refreshToken: raw };
 }
 
-function sessionFor(user, method, startedAt = new Date().toISOString()) {
-  return { userId: user.id, role: user.role, startedAt, method };
+function sessionFor(user, startedAt = new Date().toISOString()) {
+  return { userId: user.id, role: user.role, startedAt, method: "password" };
 }
 
-async function loginResult(user, method) {
-  const tokens = await issueTokens(user, method);
-  return { session: sessionFor(user, method), user: toUser(user), ...tokens };
-}
-
-export async function listPersonas() {
-  const [users, propertyCount, properties] = await Promise.all([
-    prisma.user.findMany({ orderBy: { role: "asc" } }),
-    prisma.property.count(),
-    prisma.property.findMany({ select: { id: true, name: true } }),
-  ]);
-  const pname = (id) => properties.find((p) => p.id === id)?.name ?? "—";
-  return users.map((u) => ({
-    user: toUser(u),
-    subtitle:
-      u.role === "owner" ? `${u.title} · ${propertyCount} properties`
-      : u.role === "manager" ? `Manager · ${pname(u.propertyId)}`
-      : `Student · ${pname(u.propertyId)}`,
-  }));
+async function loginResult(user) {
+  const tokens = await issueTokens(user);
+  return { session: sessionFor(user), user: toUser(user), ...tokens };
 }
 
 export async function loginWithPassword({ role, identifier, password }) {
@@ -58,24 +43,19 @@ export async function loginWithPassword({ role, identifier, password }) {
 
   const user = isEmail(id)
     ? await prisma.user.findFirst({ where: { email: { equals: id, mode: "insensitive" } } })
-    : (await prisma.user.findMany()).find((u) => normalizePhone(u.phone) === normalizePhone(id));
+    // Narrow in SQL by the last digits, then compare normalised, so formatting differences still match.
+    : (await prisma.user.findMany({ where: { phone: { endsWith: normalizePhone(id).slice(-4) } } }))
+        .find((u) => normalizePhone(u.phone) === normalizePhone(id));
 
-  // Demo password (matches the frontend) OR the user's real hash.
-  const passwordOk =
-    !!user && (password === env.demoPassword || (await verifyPassword(password, user.passwordHash)));
+  // Always run one bcrypt comparison so an unknown account takes as long as a wrong password.
+  const passwordOk = await verifyPassword(password, user?.passwordHash ?? DUMMY_HASH);
   if (!user || !passwordOk) throw unauthenticated("Email/phone or password is incorrect.");
 
   if (user.role !== role) {
     const label = user.role[0].toUpperCase() + user.role.slice(1);
     throw forbidden(`This account is registered as ${label}. Switch to the ${label} tab to continue.`);
   }
-  return loginResult(user, "password");
-}
-
-export async function loginAsPersona(userId) {
-  const user = await prisma.user.findUnique({ where: { id: userId } });
-  if (!user) throw notFound("Demo account");
-  return loginResult(user, "demo");
+  return loginResult(user);
 }
 
 export async function refresh(refreshToken) {
@@ -85,7 +65,7 @@ export async function refresh(refreshToken) {
   const user = await prisma.user.findUnique({ where: { id: stored.userId } });
   if (!user) throw unauthenticated();
   await prisma.refreshToken.update({ where: { id: stored.id }, data: { revokedAt: new Date() } });
-  return loginResult(user, "password");
+  return loginResult(user);
 }
 
 export async function logout(refreshToken) {
@@ -96,24 +76,20 @@ export async function logout(refreshToken) {
 export async function getSession(auth) {
   const user = await prisma.user.findUnique({ where: { id: auth.userId } });
   if (!user) throw unauthenticated();
-  return { session: sessionFor(user, "password"), user: toUser(user) };
+  return { session: sessionFor(user), user: toUser(user) };
 }
 
 export async function requestPasswordReset(identifier) {
   const id = identifier.trim();
   if (!id || (!isEmail(id) && !isIndianPhone(id))) throw invalid({ identifier: "Enter a valid email or 10-digit mobile number" });
-  // Same response whether or not the account exists (no enumeration).
-  // TODO: issue a real reset token + email/SMS when a provider is configured.
-  const masked = isEmail(id)
-    ? id.replace(/^(.).*(@.*)$/, "$1•••$2")
-    : `+91 •••••• ${normalizePhone(id).slice(-4)}`;
-  return { maskedDestination: masked };
+  // No email/SMS provider is integrated, so no reset link can be sent. Say so
+  // instead of pretending a message went out.
+  throw notConfigured("Password reset by email or SMS is not set up yet. Ask your hostel admin to reset your password.");
 }
 
-export async function resetPassword(token, password) {
-  if (!token || token === "expired") throw expired("This reset link has expired. Request a new one.");
-  if (password.length < 8) throw invalid({ password: "Password must be at least 8 characters" });
-  // TODO: look up the reset token, find its user, set passwordHash. Stubbed for demo parity.
+export async function resetPassword() {
+  // Reset tokens are never issued (see requestPasswordReset), so none can be valid.
+  throw notImplemented("Password reset is not available yet.");
 }
 
 export async function getInvitation(token) {
@@ -124,12 +100,9 @@ export async function getInvitation(token) {
   return inv;
 }
 
-export async function acceptInvitation(token, password) {
-  if (password.length < 8) throw invalid({ password: "Password must be at least 8 characters" });
-  const inv = await prisma.invitation.findUnique({ where: { token } });
-  if (!inv || inv.status !== "pending") throw expired("This invitation is no longer valid.");
-  await prisma.invitation.update({ where: { token }, data: { status: "accepted" } });
-  // TODO: create/activate the user account for inv.email with the chosen password.
+export async function acceptInvitation() {
+  // Accepting must create the account; that is not built. Fail without touching the invitation.
+  throw notImplemented("Accepting invitations is not available yet. Ask your hostel admin to create your account.");
 }
 
 export async function updateProfile(auth, patch) {

@@ -1,7 +1,7 @@
 import { prisma } from "../../config/prisma.js";
-import { notFound, forbidden } from "../../utils/ApiError.js";
+import { invalid } from "../../utils/ApiError.js";
 import { requireRole, assertPropertyAccess } from "../../utils/scope.js";
-import { withBalance, iso, todayISO, currentPeriod } from "../../utils/money.js";
+import { withBalance, iso, todayISO, currentPeriod, counted } from "../../utils/money.js";
 
 // Compute PropertyStats (mirrors frontend base.ts propertyStats).
 async function statsFor(property, period = currentPeriod()) {
@@ -9,7 +9,7 @@ async function statsFor(property, period = currentPeriod()) {
     prisma.bed.findMany({ where: { propertyId: property.id }, select: { status: true } }),
     prisma.room.count({ where: { propertyId: property.id } }),
     prisma.rentCharge.findMany({ where: { propertyId: property.id, period } }),
-    prisma.payment.findMany({ where: { propertyId: property.id }, select: { chargeId: true, amount: true } }),
+    prisma.payment.findMany({ where: { propertyId: property.id, ...counted }, select: { chargeId: true, amount: true } }),
     prisma.studentProfile.count({ where: { propertyId: property.id, status: { in: ["active", "notice"] } } }),
     property.managerStaffId ? prisma.staffMember.findUnique({ where: { id: property.managerStaffId }, select: { name: true } }) : null,
   ]);
@@ -24,7 +24,6 @@ async function statsFor(property, period = currentPeriod()) {
     students,
     expectedRent: wb.reduce((a, c) => a + c.amount, 0),
     collectedRent: wb.reduce((a, c) => a + Math.min(c.paid, c.amount), 0),
-    openComplaints: 0, // complaints module not yet implemented
     managerName: staff?.name,
   };
 }
@@ -33,7 +32,8 @@ const serialize = (p) => ({ ...p, openedOn: iso(p.openedOn) });
 
 export async function list(auth, filters = {}) {
   const where = {};
-  if (auth.role !== "owner") where.id = auth.propertyId; // manager/student: own property
+  if (auth.role === "owner") where.orgId = auth.orgId; // owner: their organization only
+  else where.id = auth.propertyId; // manager/student: own property
   if (filters.status) where.status = filters.status;
   if (filters.type) where.type = filters.type;
   if (filters.search) where.OR = [
@@ -46,37 +46,43 @@ export async function list(auth, filters = {}) {
 }
 
 export async function get(auth, id) {
+  await assertPropertyAccess(auth, id);
   const p = await prisma.property.findUnique({ where: { id } });
-  if (!p) throw notFound("Property");
-  assertPropertyAccess(auth, id);
   return { ...serialize(p), stats: await statsFor(p) };
+}
+
+// A manager can only be someone on this organization's own staff.
+async function assertOwnStaff(auth, staffId) {
+  if (!staffId) return;
+  const staff = await prisma.staffMember.findUnique({ where: { id: staffId }, select: { orgId: true } });
+  if (!staff || staff.orgId !== auth.orgId) throw invalid({ managerStaffId: "Choose a manager from your own staff" });
 }
 
 export async function create(auth, input) {
   requireRole(auth, "owner");
+  await assertOwnStaff(auth, input.managerStaffId);
   const p = await prisma.property.create({
     data: {
-      name: input.name, code: input.code, type: input.type, status: input.status ?? "onboarding",
+      orgId: auth.orgId, name: input.name, code: input.code, type: input.type, status: input.status ?? "onboarding",
       locality: input.locality, city: input.city, address: input.address, pincode: input.pincode,
       phone: input.phone, baseRent: input.baseRent, amenities: input.amenities ?? [],
-      managerStaffId: input.managerStaffId, openedOn: new Date(), imageVariant: Math.floor(Math.random() * 6),
+      managerStaffId: input.managerStaffId, openedOn: new Date(todayISO()), imageVariant: Math.floor(Math.random() * 6),
     },
   });
   return serialize(p);
 }
 
 export async function update(auth, id, input) {
-  const existing = await prisma.property.findUnique({ where: { id } });
-  if (!existing) throw notFound("Property");
-  assertPropertyAccess(auth, id);
+  requireRole(auth, "owner"); // managers have no property-editing screen; rent, type and status are the owner's
+  await assertPropertyAccess(auth, id);
+  await assertOwnStaff(auth, input.managerStaffId);
   const p = await prisma.property.update({ where: { id }, data: input });
   return serialize(p);
 }
 
 export async function setStatus(auth, id, status) {
   requireRole(auth, "owner");
-  const existing = await prisma.property.findUnique({ where: { id } });
-  if (!existing) throw notFound("Property");
+  await assertPropertyAccess(auth, id); // another organization's property is "not found"
   const p = await prisma.property.update({ where: { id }, data: { status } });
   return serialize(p);
 }

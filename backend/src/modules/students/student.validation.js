@@ -1,7 +1,7 @@
 import { z } from "zod";
 export const createSchema = z.object({
   name: z.string().min(2), email: z.string().email(), phone: z.string(),
-  gender: z.enum(["male", "female", "other"]), dob: z.string(), studentCode: z.string().min(1),
+  gender: z.enum(["male", "female", "other"]), dob: z.string(), studentCode: z.string().trim().min(1).optional(), // omitted → generated server-side
   college: z.string(), course: z.string(), year: z.coerce.number().int(),
   address: z.string().default(""), bloodGroup: z.string().default(""),
   guardianName: z.string().default(""), guardianRelation: z.string().default(""), guardianPhone: z.string().default(""),

@@ -7,6 +7,7 @@ import { requestId } from "./middleware/requestId.js";
 import { globalLimiter } from "./middleware/rateLimit.js";
 import { notFound, errorHandler } from "./middleware/errorHandler.js";
 import apiRoutes from "./routes/index.js";
+import { webhook as razorpayWebhook } from "./modules/payments/payment.controller.js";
 
 export function createApp() {
   const app = express();
@@ -24,12 +25,15 @@ export function createApp() {
     credentials: true,
   }));
 
-  // NB: the Razorpay webhook needs the raw body; its route attaches a raw
-  // parser itself and is matched before this JSON parser touches it.
-  app.use(express.json({ limit: "1mb" }));
   app.use(requestId);
   app.use(morgan(isProd ? "combined" : "dev"));
   app.use(globalLimiter);
+
+  // The Razorpay webhook must see the exact signed bytes and needs no login, so it
+  // is registered before the JSON parser and before every authenticated router.
+  app.post("/api/v1/payments/webhook", express.raw({ type: "*/*", limit: "1mb" }), razorpayWebhook);
+
+  app.use(express.json({ limit: "1mb" }));
 
   app.get("/health", (_req, res) => res.json({ status: "ok", uptime: process.uptime() }));
   app.use("/api/v1", apiRoutes);

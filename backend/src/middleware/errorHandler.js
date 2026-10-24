@@ -16,6 +16,12 @@ export function errorHandler(err, req, res, _next) {
     if (err.code === "P2002") e = new ApiError("CONFLICT", "A record with these details already exists");
     else if (err.code === "P2025") e = new ApiError("NOT_FOUND", "Resource was not found.");
   }
+  // Database integrity rules (CHECK constraints) are a last line of defence; the
+  // services should never trip them. If one does, refuse the change cleanly.
+  if (!(e instanceof ApiError) && /violates check constraint/i.test(String(err?.message))) {
+    console.error(`[${req.id}] integrity rule blocked a write:`, err.message);
+    e = new ApiError("CONFLICT", "This change would leave the records inconsistent, so it was not saved.");
+  }
   if (!(e instanceof ApiError)) {
     console.error(`[${req.id}]`, err);
     e = new ApiError("INTERNAL", "Something went wrong.");
