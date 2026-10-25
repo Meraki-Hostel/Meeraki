@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { ArrowRight, BedDouble, Boxes, CalendarDays, CreditCard, DoorOpen, IndianRupee, Megaphone, MessageSquareWarning, Plus, UserPlus, UserRound, Wrench } from 'lucide-react';
+import { ArrowRight, BedDouble, Boxes, CalendarDays, CreditCard, DoorOpen, IndianRupee, Megaphone, MessageSquareWarning, Plus, UserPlus, UserRound, Users, Wrench } from 'lucide-react';
 import { services } from '@/services';
 import { useQuery } from '@/hooks/useQuery';
 import { useCurrentUser } from '@/app/providers/SessionProvider';
@@ -11,16 +11,20 @@ import { StatusBadge } from '@/components/ui/StatusBadge';
 import { ErrorState, PageSkeleton, Skeleton } from '@/components/ui/States';
 import { ActivityFeed } from '@/components/domain/ActivityFeed';
 import { RecordPaymentModal } from '@/components/domain/RecordPaymentModal';
-import { greeting, todayISO } from '@/lib/clock';
-import { formatClock, formatDate, formatDateLong, formatINR } from '@/lib/format';
+import { currentPeriod, greeting, todayISO } from '@/lib/clock';
+import { formatClock, formatDate, formatDateLong, formatINR, formatPeriod } from '@/lib/format';
+import { isAvailable } from '@/lib/features';
+
+// Panels for modules without a backend are not rendered at all (no empty or invented figures).
+const HAS = { leave: isAvailable('leave'), visitors: isAvailable('visitors'), complaints: isAvailable('complaints'), maintenance: isAvailable('maintenance'), inventory: isAvailable('inventory'), announcements: isAvailable('announcements'), events: isAvailable('events') };
 
 export function ManagerDashboard() {
   const user = useCurrentUser();
   const [payOpen, setPayOpen] = useState(false);
   const o = useQuery(() => services.analytics.managerOverview(), []);
-  const visitors = useQuery(() => services.visitors.list({ date: todayISO() }), []);
-  const leaves = useQuery(() => services.leave.list({ status: 'pending' }), []);
-  const complaints = useQuery(() => services.complaints.list(), []);
+  const visitors = useQuery(async () => (HAS.visitors ? services.visitors.list({ date: todayISO() }) : []), []);
+  const leaves = useQuery(async () => (HAS.leave ? services.leave.list({ status: 'pending' }) : []), []);
+  const complaints = useQuery(async () => (HAS.complaints ? services.complaints.list() : []), []);
   const activity = useQuery(() => services.activity.list({ limit: 7 }), []);
   if (o.error) return <ErrorState message={o.error} onRetry={o.reload} />;
   if (!o.data) return <PageSkeleton />;
@@ -28,6 +32,14 @@ export function ManagerDashboard() {
   const s = d.property.stats;
   const active = (complaints.data ?? []).filter((c) => c.status === 'open' || c.status === 'in_progress').slice(0, 4);
   const todayVisitors = (visitors.data ?? []).filter((v) => v.status !== 'rejected' && v.status !== 'cancelled');
+  const month = formatPeriod(currentPeriod()).split(' ')[0];
+  const today = [
+    { l: 'Leave to decide', v: d.pendingLeaves, to: '/manager/leave', i: DoorOpen },
+    { l: 'Visitors today', v: d.visitorsToday, to: '/manager/visitors', i: UserRound },
+    { l: 'Open maintenance', v: d.openMaintenance, to: '/manager/maintenance', i: Wrench },
+    { l: 'Low-stock items', v: d.lowStock, to: '/manager/inventory', i: Boxes },
+  ].filter((x) => x.v !== undefined);
+  const panels = [HAS.leave, HAS.visitors, HAS.complaints].filter(Boolean).length;
 
   return (
     <>
@@ -36,33 +48,30 @@ export function ManagerDashboard() {
 
       <section aria-label="Key figures" className="grid gap-4 sm:grid-cols-2 xl:grid-cols-4">
         <KpiCard label="Occupancy" value={`${s.occupancyPct}%`} hint={`${s.occupiedBeds}/${s.beds} beds · ${s.availableBeds} free`} icon={<BedDouble className="size-5" />} progress={s.occupancyPct} to="/manager/rooms" />
-        <KpiCard label="October collection" value={formatINR(d.collection.collected)} hint={`${d.collection.collectionPct}% of ${formatINR(d.collection.expected)}`} icon={<IndianRupee className="size-5" />} tone="moss" to="/manager/payments" />
+        <KpiCard label={`${month} collection`} value={formatINR(d.collection.collected)} hint={`${d.collection.collectionPct}% of ${formatINR(d.collection.expected)}`} icon={<IndianRupee className="size-5" />} tone="moss" to="/manager/payments" />
         <KpiCard label="Dues outstanding" value={formatINR(d.collection.overdue + d.collection.pending)} hint={`${d.collection.overdueCount} overdue · ${d.collection.pendingCount} upcoming`} icon={<CreditCard className="size-5" />} tone={d.collection.overdueCount ? 'brick' : 'slate'} to="/manager/payments" />
-        <KpiCard label="Open complaints" value={d.openComplaints} hint={d.urgentComplaints ? `${d.urgentComplaints} urgent` : 'None urgent'} icon={<MessageSquareWarning className="size-5" />} tone={d.urgentComplaints ? 'brick' : 'amber'} to="/manager/complaints" />
+        {d.openComplaints !== undefined
+          ? <KpiCard label="Open complaints" value={d.openComplaints} hint={d.urgentComplaints ? `${d.urgentComplaints} urgent` : 'None urgent'} icon={<MessageSquareWarning className="size-5" />} tone={d.urgentComplaints ? 'brick' : 'amber'} to="/manager/complaints" />
+          : <KpiCard label="Residents" value={s.students} hint={`${s.availableBeds} ${s.availableBeds === 1 ? 'bed' : 'beds'} free`} icon={<Users className="size-5" />} to="/manager/students" />}
       </section>
-      <section aria-label="Today" className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {[
-          { l: 'Leave to decide', v: d.pendingLeaves, to: '/manager/leave', i: DoorOpen },
-          { l: 'Visitors today', v: d.visitorsToday, to: '/manager/visitors', i: UserRound },
-          { l: 'Open maintenance', v: d.openMaintenance, to: '/manager/maintenance', i: Wrench },
-          { l: 'Low-stock items', v: d.lowStock, to: '/manager/inventory', i: Boxes },
-        ].map(({ l, v, to, i: Icon }) => (
+      {today.length > 0 && <section aria-label="Today" className="mt-4 grid grid-cols-2 gap-3 lg:grid-cols-4">
+        {today.map(({ l, v, to, i: Icon }) => (
           <Link key={l} to={to} className="surface flex items-center gap-3 p-4 hover:border-line-strong">
             <Icon className="size-5 text-clay-600" aria-hidden /><span className="flex-1 text-sm text-bark">{l}</span><span className="font-display text-xl font-semibold tabular-nums">{v}</span>
           </Link>
         ))}
-      </section>
+      </section>}
 
-      <div className="mt-5 grid gap-5 lg:grid-cols-3">
-        <Card className="p-5">
+      {panels > 0 && <div className="mt-5 grid gap-5 lg:grid-cols-3">
+        {HAS.leave && <Card className="p-5">
           <CardHeader title="Leave awaiting you" action={<ButtonLink to="/manager/leave" size="sm" variant="ghost">All <ArrowRight className="size-4" aria-hidden /></ButtonLink>} />
           <ul className="mt-3 divide-y divide-line/70">
             {!leaves.data ? <Skeleton className="h-24" /> : leaves.data.length === 0 ? <li className="py-6 text-center text-sm text-dust">No pending requests.</li> : leaves.data.slice(0, 4).map((l) => (
               <li key={l.id} className="py-2.5 text-sm"><p className="font-medium">{l.studentName} <span className="font-normal text-dust">· Rm {l.roomNumber}</span></p><p className="text-xs text-dust">{formatDate(l.from)} – {formatDate(l.to)} · {l.destination}</p></li>
             ))}
           </ul>
-        </Card>
-        <Card className="p-5">
+        </Card>}
+        {HAS.visitors && <Card className="p-5">
           <CardHeader title="Visitors today" action={<ButtonLink to="/manager/visitors" size="sm" variant="ghost">Log <ArrowRight className="size-4" aria-hidden /></ButtonLink>} />
           <ul className="mt-3 divide-y divide-line/70">
             {todayVisitors.length === 0 ? <li className="py-6 text-center text-sm text-dust">No visitors expected today.</li> : todayVisitors.slice(0, 4).map((v) => (
@@ -72,8 +81,8 @@ export function ManagerDashboard() {
               </li>
             ))}
           </ul>
-        </Card>
-        <Card className="p-5">
+        </Card>}
+        {HAS.complaints && <Card className="p-5">
           <CardHeader title="Active complaints" action={<ButtonLink to="/manager/complaints" size="sm" variant="ghost">Queue <ArrowRight className="size-4" aria-hidden /></ButtonLink>} />
           <ul className="mt-3 divide-y divide-line/70">
             {active.length === 0 ? <li className="py-6 text-center text-sm text-dust">Nothing open. Nice.</li> : active.map((c) => (
@@ -83,8 +92,8 @@ export function ManagerDashboard() {
               </Link></li>
             ))}
           </ul>
-        </Card>
-      </div>
+        </Card>}
+      </div>}
 
       <div className="mt-5 grid gap-5 lg:grid-cols-5">
         <Card className="p-5 lg:col-span-2">
@@ -92,10 +101,12 @@ export function ManagerDashboard() {
           <div className="mt-4 grid grid-cols-2 gap-3 sm:grid-cols-3 lg:grid-cols-2 xl:grid-cols-3">
             <QuickAction icon={<CreditCard className="size-5" />} label="Record payment" onClick={() => setPayOpen(true)} />
             <QuickAction icon={<BedDouble className="size-5" />} label="Rooms & beds" to="/manager/rooms" />
-            <QuickAction icon={<Plus className="size-5" />} label="Maintenance ticket" to="/manager/maintenance?new=1" />
-            <QuickAction icon={<Megaphone className="size-5" />} label="Post a notice" to="/manager/announcements?new=1" />
-            <QuickAction icon={<UserRound className="size-5" />} label="Walk-in visitor" to="/manager/visitors?walkin=1" />
-            <QuickAction icon={<CalendarDays className="size-5" />} label="Plan event" to="/manager/events" />
+            <QuickAction icon={<Users className="size-5" />} label="Students" to="/manager/students" />
+            <QuickAction icon={<IndianRupee className="size-5" />} label="Dues & payments" to="/manager/payments" />
+            {HAS.maintenance && <QuickAction icon={<Plus className="size-5" />} label="Maintenance ticket" to="/manager/maintenance?new=1" />}
+            {HAS.announcements && <QuickAction icon={<Megaphone className="size-5" />} label="Post a notice" to="/manager/announcements?new=1" />}
+            {HAS.visitors && <QuickAction icon={<UserRound className="size-5" />} label="Walk-in visitor" to="/manager/visitors?walkin=1" />}
+            {HAS.events && <QuickAction icon={<CalendarDays className="size-5" />} label="Plan event" to="/manager/events" />}
           </div>
         </Card>
         <Card className="p-5 lg:col-span-3">

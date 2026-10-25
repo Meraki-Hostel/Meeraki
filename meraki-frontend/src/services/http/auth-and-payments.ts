@@ -1,9 +1,9 @@
 import { http, tokens } from './client';
 import type {
-  IAuthService, IPaymentService, SessionInfo, PersonaSummary, PasswordLoginInput,
+  IAuthService, IPaymentService, SessionInfo, PasswordLoginInput,
   ChargeView, PaymentView, CollectionSummary, RecordPaymentInput, ChargeFilters, PaymentFilters,
 } from '../interfaces';
-import type { ID, Invitation, Payment, Receipt, User, UserPreferences } from '@/types/domain';
+import type { ID, Invitation, Payment, PendingOnlinePayment, Receipt, User, UserPreferences } from '@/types/domain';
 
 type LoginResponse = SessionInfo & { accessToken: string; refreshToken: string };
 function storeAndStrip(r: LoginResponse): SessionInfo {
@@ -17,12 +17,8 @@ export const httpAuthService: IAuthService = {
     try { return await http.get<SessionInfo>('/auth/session'); }
     catch { return null; }
   },
-  listPersonas: () => http.get<PersonaSummary[]>('/auth/personas', undefined, false),
   async loginWithPassword(input: PasswordLoginInput) {
     return storeAndStrip(await http.post<LoginResponse>('/auth/login', input, false));
-  },
-  async loginAsPersona(userId: ID) {
-    return storeAndStrip(await http.post<LoginResponse>('/auth/login-as', { userId }, false));
   },
   async logout() {
     try { await http.post('/auth/logout', { refreshToken: tokens.refresh }); } finally { tokens.clear(); }
@@ -45,9 +41,9 @@ export const httpPaymentService: IPaymentService = {
     const r = await http.post<number>('/payments/reminders', { chargeIds });
     return r as unknown as number;
   },
-  // Simulated gateway returns a completed Payment (matches the demo).
-  // In PAYMENT_MODE=razorpay the API returns { pending, order, keyId } instead;
-  // open Razorpay Checkout with `order` and let the webhook finalize — see README.
+  // PAYMENT_MODE=disabled → throws NOT_CONFIGURED. simulated (dev only) → a Payment with
+  // status 'simulated'. razorpay → PendingOnlinePayment: nothing is paid until the signed
+  // webhook confirms; Razorpay Checkout is not wired into this app yet.
   payNow: (chargeId: ID, method: 'upi' | 'card' | 'netbanking') =>
-    http.post<Payment>('/payments/pay-now', { chargeId, method }),
+    http.post<Payment | PendingOnlinePayment>('/payments/pay-now', { chargeId, method }),
 };

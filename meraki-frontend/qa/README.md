@@ -1,5 +1,7 @@
 # QA scripts (optional)
 
+> These scripts drive the old **mock-mode** app (demo personas, `meraki-demo-v1` storage). The current app is API-only, so they only run against the archived mock build: `git worktree add ../meraki-mock archive/frontend-mock`, then build and run them there. See the step mapping in the B-phase report for what replaces each step.
+
 Browser checks used to verify the build. They need Python 3.10+ and `pip install playwright && playwright install chromium`.
 
 ```bash

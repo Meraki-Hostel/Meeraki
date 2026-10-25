@@ -57,8 +57,7 @@ export function ForgotPasswordPage() {
     <AuthLayout title="Forgot password">
       {sent ? (
         <StatusPanel icon={<Mail className="size-6" />} tone="moss" title="Check your inbox"
-          message={<>If an account exists for that address, a reset link has been sent to <strong className="text-espresso">{sent}</strong>. Demo mode does not send real email or SMS.</>}>
-          <ButtonLink to="/reset-password?token=demo-reset-token" size="lg">Open reset link (demo)</ButtonLink>
+          message={<>If an account exists for that address, a reset link has been sent to <strong className="text-espresso">{sent}</strong>.</>}>
           <ButtonLink to="/login" variant="ghost">Back to sign in</ButtonLink>
         </StatusPanel>
       ) : (
@@ -107,7 +106,7 @@ export function ResetPasswordPage() {
         </StatusPanel>
       )}
       {state === 'done' && (
-        <StatusPanel icon={<CheckCircle2 className="size-6" />} tone="moss" title="Password updated" message="Demo mode doesn’t store passwords — sign in with the demo credentials shown on the login page.">
+        <StatusPanel icon={<CheckCircle2 className="size-6" />} tone="moss" title="Password updated" message="Your password has been changed. Sign in with it now.">
           <ButtonLink to="/login" size="lg">Go to sign in</ButtonLink>
         </StatusPanel>
       )}
@@ -170,9 +169,8 @@ export function InviteAcceptPage() {
         <>
           <AuthHeading title="Accept your invitation" subtitle="Enter the code from your invitation email or SMS." />
           <form className="space-y-4" onSubmit={(e) => { e.preventDefault(); if (code.trim()) setParams({ token: code.trim() }); else setErrors({ code: 'Enter your invitation code' }); }} noValidate>
-            <Input label="Invitation code" value={code} onChange={(e) => { setCode(e.target.value); setErrors({}); }} error={errors.code} placeholder="e.g. demo-invite-2026" required />
+            <Input label="Invitation code" value={code} onChange={(e) => { setCode(e.target.value); setErrors({}); }} error={errors.code}  required />
             <Button type="submit" size="lg" className="w-full">Continue</Button>
-            <p className="text-center text-xs text-dust">Demo codes: <button type="button" className="underline" onClick={() => setParams({ token: 'demo-invite-2026' })}>valid invite</button> · <button type="button" className="underline" onClick={() => setParams({ token: 'expired-invite' })}>expired invite</button></p>
           </form>
         </>
       )}
@@ -186,7 +184,7 @@ export function InviteAcceptPage() {
         </StatusPanel>
       )}
       {state === 'done' && (
-        <StatusPanel icon={<CheckCircle2 className="size-6" />} tone="moss" title="You’re all set" message={`${inv?.name}, your account is active. In this demo, sign in using a demo persona.`}>
+        <StatusPanel icon={<CheckCircle2 className="size-6" />} tone="moss" title="You’re all set" message={`${inv?.name}, your account is active. Sign in with your email and the password you just chose.`}>
           <Button size="lg" onClick={() => navigate('/login')}>Continue to sign in</Button>
         </StatusPanel>
       )}

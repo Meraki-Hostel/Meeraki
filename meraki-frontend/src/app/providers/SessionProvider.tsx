@@ -10,7 +10,6 @@ interface SessionApi {
   role: Role | null;
   info: SessionInfo | null;
   loginWithPassword: (i: PasswordLoginInput) => Promise<SessionInfo>;
-  loginAsPersona: (userId: string) => Promise<SessionInfo>;
   logout: () => Promise<void>;
 }
 
@@ -35,7 +34,6 @@ export function SessionProvider({ children }: { children: ReactNode }) {
   const api = useMemo<SessionApi>(() => ({
     ready, info, user: info?.user ?? null, role: info?.user.role ?? null,
     loginWithPassword: async (i) => { const s = await services.auth.loginWithPassword(i); setInfo(s); return s; },
-    loginAsPersona: async (id) => { const s = await services.auth.loginAsPersona(id); setInfo(s); return s; },
     logout: async () => { await services.auth.logout(); setInfo(null); },
   }), [ready, info]);
 

@@ -6,6 +6,7 @@ import { BrandLogo, BrandMark } from '@/components/brand/BrandLogo';
 import { IconButton } from '@/components/ui/Button';
 import { HELP_ITEM, NAV, type NavItem } from './nav';
 import { useNavBadges } from './useNavBadges';
+import { routeAvailable } from '@/lib/features';
 
 function Item({ item, collapsed, badge, onNavigate }: { item: NavItem; collapsed: boolean; badge?: number; onNavigate?: () => void }) {
   const Icon = item.icon;
@@ -36,7 +37,7 @@ export function SidebarContent({ role, collapsed = false, onNavigate, onCollapse
         {onCloseMobile && <IconButton label="Close navigation" className="ml-auto" onClick={onCloseMobile}><X className="size-5" /></IconButton>}
       </div>
       <nav aria-label="Main" className="scroll-thin flex-1 space-y-5 overflow-y-auto px-3 pb-4 pt-2">
-        {NAV[role].map((g, i) => (
+        {NAV[role].map((g) => ({ ...g, items: g.items.filter((it) => routeAvailable(it.to)) })).filter((g) => g.items.length).map((g, i) => (
           <div key={i}>
             {g.heading && !collapsed && <p className="mb-1.5 px-3 text-[11px] font-semibold text-mute">{g.heading}</p>}
             {g.heading && collapsed && <div className="mx-3 mb-2 h-px bg-line" />}

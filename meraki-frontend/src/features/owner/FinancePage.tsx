@@ -15,11 +15,12 @@ import { DataTable, type Column } from '@/components/ui/DataTable';
 import { StatusBadge, statusOptions } from '@/components/ui/StatusBadge';
 import { ReceiptModal } from '@/components/domain/ReceiptModal';
 import { exportCSV } from '@/lib/export';
-import { currentPeriod } from '@/lib/clock';
+import { currentPeriod, recentPeriods } from '@/lib/clock';
+
+const PERIODS = recentPeriods(3);
 import { formatDate, formatINR, formatPeriod } from '@/lib/format';
 import { cn } from '@/lib/cn';
 
-const PERIODS = ['2026-10', '2026-09', '2026-08'];
 export const METHOD_LABEL: Record<PaymentMethod, string> = { upi: 'UPI', cash: 'Cash', bank_transfer: 'Bank transfer', card: 'Card' };
 
 /** Collection summary tiles shared by Owner Finance and Manager Payments. */
@@ -84,7 +85,7 @@ export function FinancePage() {
   const props = useQuery(() => services.properties.list(), []);
   const charges = useQuery(() => services.payments.listCharges({ period: period === 'all' ? undefined : period, propertyId: property || undefined, status: (status || undefined) as ChargeStatus | undefined }), [period, property, status]);
   const payments = useQuery(() => services.payments.listPayments({ propertyId: property || undefined, method: (method || undefined) as PaymentMethod | undefined, from: period === 'all' ? undefined : `${period}-01`, to: period === 'all' ? undefined : `${period}-31` }), [property, method, period]);
-  const remind = useMutation((ids: string[]) => services.payments.sendReminders(ids), { success: (n) => `Reminder sent to ${n} resident${n === 1 ? '' : 's'} (in-app only in demo mode).` });
+  const remind = useMutation((ids: string[]) => services.payments.sendReminders(ids), { success: (n) => `In-app reminder posted for ${n} resident${n === 1 ? '' : 's'} (in-app only in demo mode).` + ' (no SMS or email is sent)' });
 
   const chargeRows = useMemo(() => (charges.data ?? []).filter((c) => !ds || `${c.studentName} ${c.studentCode}`.toLowerCase().includes(ds)), [charges.data, ds]);
   const payRows = useMemo(() => (payments.data ?? []).filter((p) => !ds || `${p.studentName} ${p.receiptNo} ${p.reference}`.toLowerCase().includes(ds)), [payments.data, ds]);

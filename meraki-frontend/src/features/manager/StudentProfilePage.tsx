@@ -85,6 +85,7 @@ export function StudentProfilePage() {
     if (st === 'moved_out' && !(await confirm({ title: `Mark ${s.name} as moved out?`, message: <>Their bed{ s.roomNumber ? ` (Room ${s.roomNumber}, Bed ${s.bedLabel})` : ''} will be released. Outstanding balance of <strong>{formatINR(s.balance)}</strong> stays on record.</>, confirmLabel: 'Mark moved out', tone: 'danger' }))) return;
     void setStatus.run(st);
   };
+  const hasRequests = Boolean(d.complaints || d.leaves || d.visitors);
   const tw = (title: string, items: Array<{ label: string; value: React.ReactNode }>) => <Card className="p-5"><CardHeader title={title} as="h3" /><div className="mt-4"><DescriptionList items={items} /></div></Card>;
 
   return (
@@ -100,15 +101,17 @@ export function StudentProfilePage() {
         </>} />
 
       <div className="mb-5 grid grid-cols-2 gap-3 lg:grid-cols-4">
-        {[['Monthly rent', formatINR(s.monthlyRent)], ['Balance due', formatINR(s.balance)], ['Joined', formatDate(s.joinedOn)], ['Documents verified', `${d.documents.filter((x) => x.status === 'verified').length}/${d.documents.length}`]].map(([l, v]) => (
+        {[['Monthly rent', formatINR(s.monthlyRent)], ['Balance due', formatINR(s.balance)], ['Joined', formatDate(s.joinedOn)],
+          d.documents ? ['Documents verified', `${d.documents.filter((x) => x.status === 'verified').length}/${d.documents.length}`] : ['Paid so far', formatINR(d.payments.reduce((a, p) => a + p.amount, 0))]].map(([l, v]) => (
           <Card key={l} className="p-4"><p className="text-[13px] text-bark">{l}</p><p className={`mt-1 font-display text-xl font-semibold tabular-nums ${l === 'Balance due' && s.balance ? 'text-brick' : ''}`}>{v}</p></Card>
         ))}
       </div>
 
       <Tabs label="Profile sections" value={current} onChange={(t) => setTabParam(t === 'overview' ? null : t)} items={[
         { value: 'overview', label: 'Overview' }, { value: 'payments', label: 'Payments', count: d.payments.length },
-        { value: 'documents', label: 'Documents', count: d.documents.filter((x) => x.status === 'uploaded').length || undefined },
-        { value: 'requests', label: 'Complaints, leave & visitors', count: d.complaints.length + d.leaves.length + d.visitors.length },
+        // Tabs for modules without a backend are not shown (the API does not return those lists yet).
+        ...(d.documents ? [{ value: 'documents', label: 'Documents', count: d.documents.filter((x) => x.status === 'uploaded').length || undefined }] : []),
+        ...(hasRequests ? [{ value: 'requests', label: 'Complaints, leave & visitors', count: (d.complaints?.length ?? 0) + (d.leaves?.length ?? 0) + (d.visitors?.length ?? 0) }] : []),
       ]} />
 
       {current === 'overview' && (
@@ -149,21 +152,21 @@ export function StudentProfilePage() {
         </TabPanel>
       )}
 
-      {current === 'documents' && (
+      {current === 'documents' && d.documents && (
         <TabPanel><Card className="p-5"><CardHeader title="Document checklist" subtitle="Verify uploads or ask for a re-upload" as="h3" /><ul className="mt-2 divide-y divide-line/70">{d.documents.map((doc) => <DocReview key={doc.id} doc={doc} />)}</ul></Card></TabPanel>
       )}
 
-      {current === 'requests' && (
+      {current === 'requests' && hasRequests && (
         <TabPanel className="grid gap-5 lg:grid-cols-3">
-          <Card className="p-5"><CardHeader title="Complaints" as="h3" />
+          {d.complaints && <Card className="p-5"><CardHeader title="Complaints" as="h3" />
             <ul className="mt-3 space-y-3 text-sm">{d.complaints.map((c) => <li key={c.id}><Link to={`/manager/complaints?id=${c.id}`} className="font-medium hover:underline">{c.title}</Link><div className="mt-1 flex items-center gap-2 text-xs text-dust">{c.ticketNo} · {formatDate(c.createdAt)} <StatusBadge kind="complaint" value={c.status} /></div></li>)}{!d.complaints.length && <li className="text-dust">None</li>}</ul>
-          </Card>
-          <Card className="p-5"><CardHeader title="Leave" as="h3" />
+          </Card>}
+          {d.leaves && <Card className="p-5"><CardHeader title="Leave" as="h3" />
             <ul className="mt-3 space-y-3 text-sm">{d.leaves.map((l) => <li key={l.id}><p className="font-medium">{formatDate(l.from)} – {formatDate(l.to)}</p><div className="mt-1 flex items-center gap-2 text-xs text-dust">{l.destination} <StatusBadge kind="leave" value={l.status} /></div></li>)}{!d.leaves.length && <li className="text-dust">None</li>}</ul>
-          </Card>
-          <Card className="p-5"><CardHeader title="Visitors" as="h3" />
+          </Card>}
+          {d.visitors && <Card className="p-5"><CardHeader title="Visitors" as="h3" />
             <ul className="mt-3 space-y-3 text-sm">{d.visitors.map((v) => <li key={v.id}><p className="font-medium">{v.visitorName} <span className="font-normal text-dust">({v.relation})</span></p><div className="mt-1 flex items-center gap-2 text-xs text-dust">{formatDate(v.visitDate)}, {formatClock(v.visitTime)} <StatusBadge kind="visitor" value={v.status} /></div>{v.checkInAt && <p className="text-xs text-dust">In {formatDateTime(v.checkInAt)}{v.checkOutAt ? ` · out ${formatDateTime(v.checkOutAt)}` : ''}</p>}</li>)}{!d.visitors.length && <li className="text-dust">None</li>}</ul>
-          </Card>
+          </Card>}
         </TabPanel>
       )}
 

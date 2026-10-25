@@ -23,25 +23,37 @@ export const tokens = {
   clear() { localStorage.removeItem(ACCESS_KEY); localStorage.removeItem(REFRESH_KEY); },
 };
 
+const UNREACHABLE = "Can't reach the Meraki server right now. Check your connection and try again.";
+const KNOWN_CODES: ServiceErrorCode[] = ['VALIDATION', 'NOT_FOUND', 'FORBIDDEN', 'CONFLICT', 'UNAUTHENTICATED', 'EXPIRED', 'NOT_IMPLEMENTED', 'NOT_CONFIGURED'];
+
 async function raw(path: string, init: RequestInit, auth = true): Promise<Response> {
   const headers = new Headers(init.headers);
   headers.set('Content-Type', 'application/json');
   if (auth && tokens.access) headers.set('Authorization', `Bearer ${tokens.access}`);
-  return fetch(`${BASE}${path}`, { ...init, headers });
+  try {
+    return await fetch(`${BASE}${path}`, { ...init, headers });
+  } catch {
+    // Network down, DNS, CORS, server not running: never fall back to anything.
+    throw new ServiceError('UNAVAILABLE', UNREACHABLE);
+  }
 }
 
 async function parse<T>(res: Response): Promise<T> {
   const body = await res.json().catch(() => null);
   if (res.ok) return (body?.data ?? null) as T;
-  const code = (body?.error?.code as ServiceErrorCode) || 'CONFLICT';
-  throw new ServiceError(code, body?.error?.message || 'Request failed', body?.error?.fieldErrors);
+  const reported = body?.error?.code as ServiceErrorCode | undefined;
+  // Unknown codes (e.g. INTERNAL) and bodies that are not our envelope (proxy errors) are "unavailable".
+  const code: ServiceErrorCode = reported && KNOWN_CODES.includes(reported) ? reported : res.status >= 500 || !body ? 'UNAVAILABLE' : 'CONFLICT';
+  const message = code === 'UNAVAILABLE' && !body?.error?.message ? UNREACHABLE : body?.error?.message || 'Request failed';
+  throw new ServiceError(code, message, body?.error?.fieldErrors);
 }
 
 async function tryRefresh(): Promise<boolean> {
   if (!tokens.refresh) return false;
   const res = await raw('/auth/refresh', { method: 'POST', body: JSON.stringify({ refreshToken: tokens.refresh }) }, false);
   if (!res.ok) { tokens.clear(); return false; }
-  const data = (await res.json()).data;
+  const data = (await res.json().catch(() => null))?.data;
+  if (!data) { tokens.clear(); return false; }
   tokens.set({ accessToken: data.accessToken, refreshToken: data.refreshToken });
   return true;
 }

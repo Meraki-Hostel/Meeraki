@@ -33,7 +33,7 @@ export function AnalyticsPage() {
     { key: 'col', header: 'Collected', align: 'right', cell: (p) => formatINR(p.stats.collectedRent), sortValue: (p) => p.stats.collectedRent },
     { key: 'rate', header: 'Rate', align: 'right', cell: (p) => (p.stats.expectedRent ? `${Math.round((p.stats.collectedRent / p.stats.expectedRent) * 100)}%` : '—'), sortValue: (p) => (p.stats.expectedRent ? p.stats.collectedRent / p.stats.expectedRent : 0) },
     { key: 'arr', header: 'Arrears', align: 'right', cell: (p) => <span className="text-brick">{formatINR(p.stats.expectedRent - p.stats.collectedRent)}</span>, sortValue: (p) => p.stats.expectedRent - p.stats.collectedRent },
-    { key: 'cmp', header: 'Open issues', align: 'right', cell: (p) => p.stats.openComplaints, sortValue: (p) => p.stats.openComplaints, hideBelow: 'md' },
+    { key: 'cmp', header: 'Open issues', align: 'right', cell: (p) => p.stats.openComplaints ?? '—', sortValue: (p) => p.stats.openComplaints ?? -1, hideBelow: 'md' },
   ];
 
   const doExport = () => exportCSV(`analytics-${months}m${property ? `-${property}` : ''}`, t, [

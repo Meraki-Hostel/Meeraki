@@ -1,20 +1,28 @@
 import { services } from '@/services';
 import { useQuery } from '@/hooks/useQuery';
+import { isAvailable } from '@/lib/features';
 import type { Role } from '@/types/domain';
 import type { BadgeKey } from './nav';
 
-/** Live counters for sidebar badges, recomputed after any demo mutation. */
+/** Live counters for sidebar badges. Modules without a backend contribute nothing (no made-up counts). */
 export function useNavBadges(role: Role | null): Partial<Record<BadgeKey, number>> {
   const q = useQuery(async () => {
-    if (!role) return {};
+    const out: Partial<Record<BadgeKey, number>> = {};
+    if (!role) return out;
+    const jobs: Promise<void>[] = [];
     if (role === 'student') {
-      const notices = await services.announcements.list();
-      return { notices: notices.filter((n) => !n.isRead).length };
+      if (isAvailable('announcements')) jobs.push(services.announcements.list().then((n) => { out.notices = n.filter((x) => !x.isRead).length; }));
+    } else {
+      if (isAvailable('complaints')) jobs.push(services.complaints.list({ status: 'open' }).then((c) => { out.complaints = c.length; }));
+      if (isAvailable('inventory')) jobs.push(services.inventory.list({ lowStockOnly: true }).then((i) => { out.lowStock = i.length; }));
+      if (role === 'manager') {
+        if (isAvailable('leave')) jobs.push(services.leave.list({ status: 'pending' }).then((l) => { out.leave = l.length; }));
+        if (isAvailable('visitors')) jobs.push(services.visitors.list({ status: 'pending' }).then((v) => { out.visitors = v.length; }));
+        if (isAvailable('maintenance')) jobs.push(services.maintenance.list({ status: 'open' }).then((m) => { out.maintenance = m.length; }));
+      }
     }
-    const [complaints, lowStock] = await Promise.all([services.complaints.list({ status: 'open' }), services.inventory.list({ lowStockOnly: true })]);
-    if (role === 'owner') return { complaints: complaints.length, lowStock: lowStock.length };
-    const [leave, visitors, maintenance] = await Promise.all([services.leave.list({ status: 'pending' }), services.visitors.list({ status: 'pending' }), services.maintenance.list({ status: 'open' })]);
-    return { complaints: complaints.length, lowStock: lowStock.length, leave: leave.length, visitors: visitors.length, maintenance: maintenance.length };
+    await Promise.all(jobs);
+    return out;
   }, [role]);
   return q.data ?? {};
 }

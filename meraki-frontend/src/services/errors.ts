@@ -1,4 +1,9 @@
-export type ServiceErrorCode = 'VALIDATION' | 'NOT_FOUND' | 'FORBIDDEN' | 'CONFLICT' | 'UNAUTHENTICATED' | 'EXPIRED';
+export type ServiceErrorCode =
+  | 'VALIDATION' | 'NOT_FOUND' | 'FORBIDDEN' | 'CONFLICT' | 'UNAUTHENTICATED' | 'EXPIRED'
+  /** The feature is not built yet / the integration it needs is not set up. Show as unavailable, never as success. */
+  | 'NOT_IMPLEMENTED' | 'NOT_CONFIGURED'
+  /** Client-side only: the server could not be reached or failed unexpectedly. */
+  | 'UNAVAILABLE';
 
 /** Typed error thrown by every service. A future HTTP adapter maps status codes onto these. */
 export class ServiceError extends Error {

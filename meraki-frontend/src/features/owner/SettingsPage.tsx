@@ -1,10 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Laptop, RotateCcw, Smartphone } from 'lucide-react';
+import { Laptop, Smartphone } from 'lucide-react';
 import { services } from '@/services';
 import type { OrganizationSettings } from '@/types/domain';
 import { useQuery } from '@/hooks/useQuery';
 import { useMutation } from '@/hooks/useMutation';
-import { useConfirm } from '@/app/providers/ConfirmProvider';
 import { useToast } from '@/app/providers/ToastProvider';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardHeader } from '@/components/ui/Card';
@@ -15,7 +14,6 @@ import { PageSkeleton } from '@/components/ui/States';
 export function SettingsPage() {
   const q = useQuery(() => services.settings.get(), []);
   const [f, setF] = useState<OrganizationSettings | null>(null);
-  const confirm = useConfirm();
   const toast = useToast();
   useEffect(() => { if (q.data && !f) setF(q.data); }, [q.data, f]);
   const save = useMutation(services.settings.update, { success: 'Settings saved. They’ll persist after refresh.', onSuccess: (s) => setF(s) });
@@ -24,13 +22,6 @@ export function SettingsPage() {
   const set = <K extends keyof OrganizationSettings>(k: K, v: OrganizationSettings[K]) => setF({ ...f, [k]: v });
   const e = save.fieldErrors;
   const submit = (ev: FormEvent) => { ev.preventDefault(); void save.run(f); };
-  const reset = async () => {
-    if (!(await confirm({ title: 'Reset all demo data?', message: 'Every change made in this browser will be replaced with the original demo data. This cannot be undone.', confirmLabel: 'Reset demo data', tone: 'danger' }))) return;
-    await services.settings.resetDemoData();
-    setF(null);
-    toast.success('Demo data restored.');
-  };
-
   return (
     <form onSubmit={submit} noValidate>
       <PageHeader title="Settings" subtitle="Organization profile, rent rules, notifications and security."
@@ -79,11 +70,6 @@ export function SettingsPage() {
             <li className="flex items-center gap-3 rounded-xl bg-sand/50 px-3 py-2"><Smartphone className="size-4 text-dust" aria-hidden /><span className="flex-1">Android app · 2 days ago (sample)</span></li>
           </ul>
           <Button variant="secondary" size="sm" className="mt-3" onClick={() => toast.info('Other sessions would be signed out. Sessions are simulated in demo mode.')}>Sign out other sessions</Button>
-        </Card>
-        <Card className="border-brick/30 p-5">
-          <CardHeader title="Demo data" subtitle="Everything you change lives in this browser’s storage" />
-          <p className="mt-3 text-sm text-bark">Resetting restores the original properties, residents, payments and requests. You will stay signed in.</p>
-          <Button variant="danger" className="mt-4" icon={<RotateCcw className="size-4" />} onClick={() => void reset()}>Reset demo data</Button>
         </Card>
       </div>
     </form>

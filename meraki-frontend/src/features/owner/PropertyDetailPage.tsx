@@ -16,7 +16,10 @@ import { ErrorState, PageSkeleton, Skeleton } from '@/components/ui/States';
 import { ActivityFeed } from '@/components/domain/ActivityFeed';
 import { PropertyImage } from '@/components/brand/PropertyImage';
 import { formatDate, formatINR, formatPeriod, formatPhone, sentenceCase } from '@/lib/format';
-import { currentPeriod } from '@/lib/clock';
+import { currentPeriod, recentPeriods } from '@/lib/clock';
+import { isAvailable } from '@/lib/features';
+
+const HAS_STAFF = isAvailable('staff');
 import { cn } from '@/lib/cn';
 import { EditPropertyModal, PropertyActions } from './PropertiesPages';
 
@@ -31,8 +34,12 @@ export function PropertyDetailPage() {
   const rooms = useQuery(() => services.rooms.list({ propertyId }), [propertyId]);
   const students = useQuery(() => services.students.list({ propertyId }), [propertyId]);
   const summary = useQuery(() => services.payments.summary({ propertyId }), [propertyId]);
-  const trend = useQuery(() => services.analytics.trends({ propertyId, months: 6 }), [propertyId]);
-  const staff = useQuery(() => services.staff.list({ propertyId }), [propertyId]);
+  // Six real monthly payment summaries (oldest first), straight from the API.
+  const trend = useQuery(() => Promise.all(recentPeriods(6).reverse().map(async (period) => {
+    const m = await services.payments.summary({ propertyId, period });
+    return { period, label: formatPeriod(period).slice(0, 3), expected: m.expected, collected: m.collected };
+  })), [propertyId]);
+  const staff = useQuery(async () => (HAS_STAFF ? services.staff.list({ propertyId }) : []), [propertyId]);
   const activity = useQuery(() => services.activity.list({ propertyId, limit: 25 }), [propertyId]);
 
   if (q.error) return <ErrorState message={q.error} onRetry={q.reload} />;
@@ -66,7 +73,9 @@ export function PropertyDetailPage() {
             <KpiCard label="Occupancy" value={`${s.occupancyPct}%`} hint={`${s.occupiedBeds} of ${s.beds} beds`} icon={<BedDouble className="size-5" />} progress={s.occupancyPct} />
             <KpiCard label="Residents" value={s.students} hint={`${s.availableBeds} beds free · ${s.unavailableBeds} blocked`} icon={<Users className="size-5" />} />
             <KpiCard label={`Collected, ${formatPeriod(currentPeriod())}`} value={formatINR(s.collectedRent)} hint={`of ${formatINR(s.expectedRent)} expected`} icon={<IndianRupee className="size-5" />} tone="moss" />
-            <KpiCard label="Open complaints" value={s.openComplaints} hint="Open or in progress" icon={<MessageSquareWarning className="size-5" />} tone={s.openComplaints ? 'amber' : 'moss'} to={`/owner/complaints`} />
+            {s.openComplaints !== undefined
+              ? <KpiCard label="Open complaints" value={s.openComplaints} hint="Open or in progress" icon={<MessageSquareWarning className="size-5" />} tone={s.openComplaints ? 'amber' : 'moss'} to={`/owner/complaints`} />
+              : <KpiCard label="Rooms" value={s.rooms} hint={`${s.beds} beds`} icon={<BedDouble className="size-5" />} />}
           </div>
           <div className="mt-5 grid gap-5 lg:grid-cols-3">
             <Card className="overflow-hidden lg:col-span-2">
@@ -81,7 +90,9 @@ export function PropertyDetailPage() {
             </Card>
             <Card className="p-5">
               <CardHeader title="Manager" />
-              {manager ? (
+              {!HAS_STAFF ? (
+                s.managerName ? <p className="mt-3 text-base font-semibold">{s.managerName}</p> : <p className="mt-3 text-sm text-dust">No manager assigned yet.</p>
+              ) : manager ? (
                 <div className="mt-3 space-y-1 text-sm">
                   <p className="text-base font-semibold">{manager.name}</p>
                   <StatusBadge kind="staff" value={manager.status} />
@@ -89,12 +100,14 @@ export function PropertyDetailPage() {
                   <p className="break-all text-bark">{manager.email}</p>
                 </div>
               ) : <p className="mt-3 text-sm text-dust">No manager assigned yet.</p>}
-              <ButtonLink to="/owner/staff" variant="secondary" size="sm" className="mt-4">Manage staff</ButtonLink>
-              <h3 className="mt-6 text-base font-semibold">Team</h3>
-              <ul className="mt-2 space-y-1.5 text-sm">
-                {(staff.data ?? []).filter((x) => x.id !== p.managerStaffId).map((x) => <li key={x.id} className="flex justify-between gap-2"><span>{x.name}</span><span className="text-dust">{sentenceCase(x.role)}</span></li>)}
-                {staff.data && staff.data.length <= 1 && <li className="text-dust">No other staff yet.</li>}
-              </ul>
+              {HAS_STAFF && <>
+                <ButtonLink to="/owner/staff" variant="secondary" size="sm" className="mt-4">Manage staff</ButtonLink>
+                <h3 className="mt-6 text-base font-semibold">Team</h3>
+                <ul className="mt-2 space-y-1.5 text-sm">
+                  {(staff.data ?? []).filter((x) => x.id !== p.managerStaffId).map((x) => <li key={x.id} className="flex justify-between gap-2"><span>{x.name}</span><span className="text-dust">{sentenceCase(x.role)}</span></li>)}
+                  {staff.data && staff.data.length <= 1 && <li className="text-dust">No other staff yet.</li>}
+                </ul>
+              </>}
             </Card>
           </div>
         </TabPanel>

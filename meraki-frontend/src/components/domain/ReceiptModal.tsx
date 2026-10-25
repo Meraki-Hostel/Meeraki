@@ -13,16 +13,18 @@ const METHOD: Record<string, string> = { upi: 'UPI', cash: 'Cash', bank_transfer
 export function ReceiptModal({ paymentId, onClose }: { paymentId: string | null; onClose: () => void }) {
   const q = useQuery(() => (paymentId ? services.payments.getReceipt(paymentId) : Promise.resolve(null)), [paymentId]);
   const r = q.data;
+  // Only `simulated` payments (development) are not real; everything else returned by the API was received.
+  const simulated = r?.payment.status === 'simulated';
   const download = () => {
     if (!r) return;
     const lines = [
-      'MERAKI HOSTEL MANAGEMENT — RENT RECEIPT (DEMO)', '',
+      simulated ? 'MERAKI — SIMULATED PAYMENT (NO MONEY RECEIVED)' : 'MERAKI — RENT RECEIPT', '',
       `Receipt no: ${r.receiptNo}`, `Date: ${formatDate(r.payment.paidOn)}`, '',
       `Property: ${r.property.name}`, `Address: ${r.property.address}`, '',
       `Resident: ${r.student.name} (${r.student.studentCode})`, `Phone: ${formatPhone(r.student.phone)}`, `Room: ${r.roomLabel}`, '',
       `For: ${r.charge.description} — ${formatPeriod(r.charge.period)}`, `Amount paid: ${formatINR(r.payment.amount)}`,
       `Method: ${METHOD[r.payment.method]}`, `Reference: ${r.payment.reference}`, `Recorded by: ${r.payment.recordedBy}`, '',
-      'This is a demo receipt generated without a backend. Not valid for tax purposes.',
+      simulated ? 'Recorded in a development environment. No money was received.' : 'Computer-generated receipt.',
     ];
     downloadFile(`${r.receiptNo}.txt`, lines.join('\n'));
   };
@@ -51,7 +53,7 @@ export function ReceiptModal({ paymentId, onClose }: { paymentId: string | null;
             <span className="text-sm text-bark">Amount paid</span>
             <span className="font-display text-2xl font-semibold tabular-nums">{formatINR(r.payment.amount)}</span>
           </div>
-          <p className="mt-4 text-[11px] leading-relaxed text-dust">Recorded by {r.payment.recordedBy}. Demo receipt generated without a backend — not valid for tax purposes.</p>
+          <p className="mt-4 text-[11px] leading-relaxed text-dust">Recorded by {r.payment.recordedBy}. {simulated ? <strong className="text-brick">Simulated payment: no money was received.</strong> : 'Computer-generated receipt.'}</p>
         </div>
       )}
     </Modal>

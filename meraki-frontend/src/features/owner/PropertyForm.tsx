@@ -3,6 +3,7 @@ import { services } from '@/services';
 import type { PropertyInput } from '@/services/interfaces';
 import type { Property, PropertyStatus, PropertyType } from '@/types/domain';
 import { useQuery } from '@/hooks/useQuery';
+import { isAvailable } from '@/lib/features';
 import { Button } from '@/components/ui/Button';
 import { Checkbox, Input, RadioGroup, Select, Textarea } from '@/components/ui/Field';
 import { rules, validate } from '@/lib/validation';
@@ -19,10 +20,11 @@ export interface PropertyFormProps {
 }
 
 export function PropertyForm({ initial, submitLabel, pending, serverErrors, onSubmit, onCancel }: PropertyFormProps) {
-  const managers = useQuery(() => services.staff.list({ role: 'manager' }), []);
+  // Picking a manager needs the staff module; until it has a backend the field is hidden.
+  const managers = useQuery(async () => (isAvailable('staff') ? services.staff.list({ role: 'manager' }) : null), []);
   const [f, setF] = useState({
     name: initial?.name ?? '', code: initial?.code ?? '', type: (initial?.type ?? 'boys') as PropertyType, status: (initial?.status ?? 'onboarding') as PropertyStatus,
-    locality: initial?.locality ?? '', city: initial?.city ?? 'Lucknow', address: initial?.address ?? '', pincode: initial?.pincode ?? '', phone: initial?.phone ?? '',
+    locality: initial?.locality ?? '', city: initial?.city ?? '', address: initial?.address ?? '', pincode: initial?.pincode ?? '', phone: initial?.phone ?? '',
     baseRent: initial ? String(initial.baseRent) : '9000', amenities: initial?.amenities ?? ['Wi-Fi', 'Mess', 'CCTV'], managerStaffId: initial?.managerStaffId ?? '',
   });
   const [errors, setErrors] = useState<Record<string, string>>({});
@@ -61,7 +63,7 @@ export function PropertyForm({ initial, submitLabel, pending, serverErrors, onSu
       <fieldset className="grid gap-4 sm:grid-cols-2">
         <legend className="mb-3 font-display text-lg font-semibold">Operations</legend>
         <Input id="pf-baseRent" label="Base rent per bed (₹/month)" type="number" min={1000} required value={f.baseRent} onChange={(e) => set('baseRent', e.target.value)} error={errors.baseRent} />
-        <Select label="Manager" value={f.managerStaffId} onChange={(e) => set('managerStaffId', e.target.value)} placeholder="Assign later" options={(managers.data ?? []).map((m) => ({ value: m.id, label: `${m.name}${m.propertyName && m.propertyId !== initial?.id ? ` (now at ${m.propertyName})` : ''}` }))} hint="Invite a new manager from Staff" />
+        {managers.data && <Select label="Manager" value={f.managerStaffId} onChange={(e) => set('managerStaffId', e.target.value)} placeholder="Assign later" options={(managers.data ?? []).map((m) => ({ value: m.id, label: `${m.name}${m.propertyName && m.propertyId !== initial?.id ? ` (now at ${m.propertyName})` : ''}` }))} hint="Invite a new manager from Staff" />}
         <div className="sm:col-span-2">
           <p className="mb-2 text-[13px] font-medium text-bark">Amenities</p>
           <div className="grid grid-cols-2 gap-2 sm:grid-cols-3">

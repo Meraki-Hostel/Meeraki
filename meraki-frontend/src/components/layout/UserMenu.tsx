@@ -1,48 +1,19 @@
 import { useNavigate } from 'react-router-dom';
-import { Bell, ChevronDown, LifeBuoy, LogOut, RotateCcw, UserRound, Users } from 'lucide-react';
-import { services } from '@/services';
-import { useQuery } from '@/hooks/useQuery';
-import { roleHome, useSession } from '@/app/providers/SessionProvider';
-import { useConfirm } from '@/app/providers/ConfirmProvider';
-import { useToast } from '@/app/providers/ToastProvider';
+import { Bell, ChevronDown, LifeBuoy, LogOut, UserRound } from 'lucide-react';
+import { useSession } from '@/app/providers/SessionProvider';
 import { Avatar } from '@/components/ui/Avatar';
 import { Dropdown, type MenuEntry } from '@/components/ui/Dropdown';
-import { errorMessage } from '@/services/errors';
 
 export function UserMenu() {
-  const { user, loginAsPersona, logout } = useSession();
+  const { user, logout } = useSession();
   const navigate = useNavigate();
-  const confirm = useConfirm();
-  const toast = useToast();
-  const personas = useQuery(() => services.auth.listPersonas(), []);
   if (!user) return null;
-
-  const switchTo = async (id: string) => {
-    try {
-      const s = await loginAsPersona(id);
-      navigate(roleHome(s.user.role));
-      toast.info(`Now viewing as ${s.user.name}.`, 'Persona switched');
-    } catch (e) { toast.error(errorMessage(e)); }
-  };
-  const reset = async () => {
-    const ok = await confirm({ title: 'Reset demo data?', message: 'All changes made in this browser — new students, payments, complaints, settings — will be replaced with the original demo data. You will stay signed in.', confirmLabel: 'Reset demo data', tone: 'danger' });
-    if (!ok) return;
-    await services.settings.resetDemoData();
-    toast.success('Demo data restored to its original state.');
-  };
 
   const items: MenuEntry[] = [
     { label: 'My profile', icon: <UserRound className="size-4" />, onSelect: () => navigate('/profile') },
     { label: 'Notifications', icon: <Bell className="size-4" />, onSelect: () => navigate('/notifications') },
     { label: 'Help & support', icon: <LifeBuoy className="size-4" />, onSelect: () => navigate('/help') },
     'separator',
-    { heading: 'Switch demo persona' },
-    ...(personas.data ?? []).filter((p) => p.user.id !== user.id).map<MenuEntry>((p) => ({
-      label: `${p.user.name} — ${p.user.role === 'owner' ? 'Owner' : p.user.role === 'manager' ? 'Manager' : 'Student'}`,
-      icon: <Users className="size-4" />, hint: p.subtitle, onSelect: () => void switchTo(p.user.id),
-    })),
-    'separator',
-    { label: 'Reset demo data', icon: <RotateCcw className="size-4" />, onSelect: () => void reset() },
     { label: 'Log out', icon: <LogOut className="size-4" />, danger: true, onSelect: () => { void logout().then(() => navigate('/login')); } },
   ];
 
