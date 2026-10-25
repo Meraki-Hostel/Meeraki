@@ -1,0 +1,16 @@
+# Used only by a Netlify site whose Base directory is the repo root (the
+# existing prototype site). It keeps deploying the prototype from prototype/.
+# Sites with their own Base directory (meraki-frontend, prototype) use the
+# netlify.toml in that folder instead.
+[build]
+  base = "prototype"
+  command = "npm run build"
+  publish = "dist"
+
+[build.environment]
+  NODE_VERSION = "22"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
