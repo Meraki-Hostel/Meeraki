@@ -1,28 +1,45 @@
-# Meraki — Hostel Management Prototype
+# Meraki — Hostel Management
 
-A frontend-only, high-fidelity prototype for validating the product scope with students, wardens/managers and owners. There is **no backend**: all data is seeded mock data held in React state and persisted to `localStorage`.
+Monorepo with three independently deployable apps:
+
+| Folder | What | Stack | Deploy |
+| --- | --- | --- | --- |
+| [`meraki-frontend/`](meraki-frontend) | The real web app (Owner, Manager/Warden, Student) | React + Vite + TypeScript | Static site (Netlify/Vercel), base directory `meraki-frontend` |
+| [`backend/`](backend) | REST API for web and mobile | Node + Express + Prisma + PostgreSQL | Node host (Render/Railway/Fly), root directory `backend` |
+| [`prototype/`](prototype) | Original clickable prototype, kept for demos | React + Vite, mock data only | Static site, base directory `prototype` |
+
+Each folder has its own `package.json` and README; there is no shared root install.
+
+## Run the real app locally
 
 ```bash
+# 1. API (needs PostgreSQL — local or Neon; see backend/README.md)
+cd backend
 npm install
-npm run dev        # http://localhost:5173
+cp .env.example .env        # fill in DATABASE_URL, DIRECT_URL, JWT secrets
+npm run prisma:migrate
+npm run db:seed
+npm run dev                 # http://localhost:4000/health
+
+# 2. Frontend (new terminal)
+cd meraki-frontend
+npm install
+cp .env.example .env        # VITE_API_BASE_URL=http://localhost:4000/api/v1
+npm run dev                 # http://localhost:5173
 ```
 
-## Demo guide
+Sign in with `owner@demo.com`, `manager@demo.com` or `student@demo.com` (password `meraki@123`).
 
-- **Switch roles** from the profile menu (top right): Student · Manager / Warden · Owner. The same menu lets you pick the student persona, the manager's property, and **reset demo data**.
-- Default personas: **Rahul Sharma** (Room 204-B, Shanti Residency), **Anita Desai** (manager, Shanti Residency), **Pawan Kushwah** (owner, 5 properties).
-- The demo calendar is fixed to **25 September 2026** so that due dates and "today" lists always read correctly.
-- Manager/Owner: press **⌘K / Ctrl+K** for global search.
+## What's on the real API so far
 
-## Structure
+Auth, properties, rooms/beds, students, payments, notifications and activity.
+Complaints, leave, visitors, maintenance, inventory, staff, announcements,
+events, feedback, documents, analytics, settings and search still run on the
+frontend mock (demo data) until their backend modules are built. See
+`backend/README.md` → "Adding the remaining modules".
 
-| Path | What |
-| --- | --- |
+## Working in this repo
 
-added contribution
-| `src/data/seed.ts` | Deterministic, relational mock data (5 properties, 1,250 beds, ~1,080 students, dues, complaints, …) |
-| `src/store/AppStore.tsx` | Single client store: every prototype action (add student, assign/transfer bed, payments, complaints, leave, …) |
-| `src/store/selectors.ts` | Derived values (payment status, occupancy, KPIs) — computed, never stored, so every screen stays consistent |
-| `src/components/ui` | Design system: buttons, badges, cards, modals, drawers, toasts, confirm dialogs, tabs, tables |
-| `src/components/domain` | Workflow components: Add Student wizard, bed picker, payment & receipt, complaint card/drawer |
-| `src/pages/{student,manager,owner}` | Role experiences |
+- `main` is always deployable. Branch per change (`feat/…`, `fix/…`) and open a PR.
+- A change that touches both API and UI goes in one PR.
+- Never commit `.env` files. Each app ships a `.env.example` instead.
