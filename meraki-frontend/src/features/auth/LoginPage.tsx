@@ -1,42 +1,49 @@
-import { useEffect, useState, type FormEvent } from 'react';
+import { useState, type FormEvent } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
-import { ArrowRight, Building2, Lock, Mail, UserRound, Users } from 'lucide-react';
-import { services } from '@/services';
-import type { PersonaSummary } from '@/services/interfaces';
+import { ArrowRight, Building2, ChartColumn, Eye, EyeOff, Leaf, LockKeyhole, Mail, UserRound, Users } from 'lucide-react';
 import { errorMessage, isServiceError } from '@/services/errors';
 import { roleHome, useSession } from '@/app/providers/SessionProvider';
 import { useToast } from '@/app/providers/ToastProvider';
-import { Button } from '@/components/ui/Button';
-import { Checkbox, Input, PasswordInput } from '@/components/ui/Field';
-import { SegmentedControl } from '@/components/ui/Tabs';
-import { Avatar } from '@/components/ui/Avatar';
+import { useDocumentTitle } from '@/hooks/misc';
 import { rules, validate } from '@/lib/validation';
 import type { Role } from '@/types/domain';
-import { AuthHeading, AuthLayout } from './AuthLayout';
+import './login-page.css';
 
-const ROLE_OPTIONS: Array<{ value: Role; label: string; icon: JSX.Element }> = [
-  { value: 'manager', label: 'Manager', icon: <Building2 className="size-4" aria-hidden /> },
-  { value: 'student', label: 'Student', icon: <Users className="size-4" aria-hidden /> },
-  { value: 'owner', label: 'Owner', icon: <UserRound className="size-4" aria-hidden /> },
+const ROLE_OPTIONS: Array<{ value: Role; label: string; Icon: typeof Building2 }> = [
+  { value: 'manager', label: 'Manager', Icon: Building2 },
+  { value: 'student', label: 'Student', Icon: Users },
+  { value: 'owner', label: 'Owner', Icon: UserRound },
 ];
-const DEMO_PASSWORD_HINT = 'meraki@123';
+
+function Brand({ centered = false }: { centered?: boolean }) {
+  return (
+    <div className={`lp-brand ${centered ? 'lp-brand-centered' : ''}`}>
+      <svg className="lp-brand-mark" viewBox="0 0 70 48" aria-hidden="true">
+        <path d="M4 40 35 8 66 40H48L35 26 22 40Z" fill="currentColor" />
+        <path d="M24 40 35 29 46 40Z" fill="#f8eee5" />
+      </svg>
+      <div className="lp-brand-copy">
+        <div className="lp-brand-name">Meraki</div>
+        <div className="lp-brand-sub">Hostel Management</div>
+      </div>
+    </div>
+  );
+}
 
 export function LoginPage() {
-  const { loginWithPassword, loginAsPersona } = useSession();
+  useDocumentTitle('Sign in');
+  const { loginWithPassword } = useSession();
   const navigate = useNavigate();
   const location = useLocation();
   const toast = useToast();
   const [role, setRole] = useState<Role>('manager');
   const [identifier, setIdentifier] = useState('');
   const [password, setPassword] = useState('');
+  const [showPassword, setShowPassword] = useState(false);
   const [remember, setRemember] = useState(true);
   const [errors, setErrors] = useState<Record<string, string>>({});
   const [formError, setFormError] = useState<string | null>(null);
   const [pending, setPending] = useState(false);
-  const [personaPending, setPersonaPending] = useState<string | null>(null);
-  const [personas, setPersonas] = useState<PersonaSummary[]>([]);
-
-  useEffect(() => { void services.auth.listPersonas().then(setPersonas); }, []);
 
   const from = (location.state as { from?: string } | null)?.from;
   const finish = (r: Role) => {
@@ -61,70 +68,99 @@ export function LoginPage() {
     } finally { setPending(false); }
   };
 
-  const demo = async (p: PersonaSummary) => {
-    setPersonaPending(p.user.id);
-    try { const s = await loginAsPersona(p.user.id); finish(s.user.role); } catch (err) { toast.error(errorMessage(err)); } finally { setPersonaPending(null); }
-  };
-
-  const fillDemo = () => {
-    const p = personas.find((x) => x.user.role === role);
-    if (!p) return;
-    setIdentifier(p.user.email);
-    setPassword(DEMO_PASSWORD_HINT);
-    setErrors({});
-  };
-
   return (
-    <AuthLayout title="Sign in">
-      <AuthHeading title="Welcome back" subtitle="Sign in to continue to your account" />
-      <form onSubmit={submit} noValidate className="space-y-4">
-        <div className="flex justify-center">
-          <SegmentedControl label="Sign in as" value={role} onChange={(r) => { setRole(r); setFormError(null); }} options={ROLE_OPTIONS} />
-        </div>
-        <Input label="Email or phone number" name="identifier" autoComplete="username" inputMode="email" placeholder="Enter your email or phone number"
-          leading={<Mail className="size-4" />} value={identifier} onChange={(e) => { setIdentifier(e.target.value); setErrors((x) => ({ ...x, identifier: '' })); }} error={errors.identifier} required />
-        <PasswordInput label="Password" name="password" autoComplete="current-password" placeholder="Enter your password"
-          leading={<Lock className="size-4" />} value={password} onChange={(e) => { setPassword(e.target.value); setErrors((x) => ({ ...x, password: '' })); }} error={errors.password} required />
-        <div className="flex items-center justify-between gap-3">
-          <Checkbox label="Remember me" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
-          <Link to="/forgot-password" className="text-sm font-medium text-clay-700 hover:underline">Forgot password?</Link>
-        </div>
-        {formError && <p role="alert" className="rounded-xl border border-brick/25 bg-brick-wash px-3 py-2 text-sm text-brick">{formError}</p>}
-        <Button type="submit" size="lg" className="w-full" loading={pending}>Sign in <ArrowRight className="size-4" aria-hidden /></Button>
-        <button type="button" onClick={fillDemo} className="block w-full text-center text-xs text-dust hover:text-espresso">
-          Use demo credentials for <span className="font-medium text-bark">{ROLE_OPTIONS.find((r) => r.value === role)?.label}</span>
-        </button>
-      </form>
+    <div className="login-page-root">
+      <main className="lp-shell">
+        <div className="lp-campus-bg" aria-hidden="true" />
+        <div className="lp-bottom-blur" aria-hidden="true" />
 
-      <div className="my-5 flex items-center gap-3 text-xs text-mute"><span className="h-px flex-1 bg-line" />or<span className="h-px flex-1 bg-line" /></div>
-      <Button variant="secondary" size="lg" className="w-full" onClick={() => toast.info('Google sign-in is not connected in this demo. Use a demo account below.', 'Demo only')}>
-        <span className="grid size-5 place-items-center rounded-full border border-line font-display text-[13px] font-bold text-slate-ink" aria-hidden>G</span>
-        Continue with Google
-      </Button>
+        <section className="lp-intro">
+          <Brand />
+          <div className="lp-intro-copy">
+            <h1>
+              <span>Simpler</span><br />Hostel Management<br />for a <em>Better Tomorrow</em>
+            </h1>
+            <p>Students. Rooms. Operations.<br />All in one place.</p>
+            <div className="lp-rule" />
+          </div>
+          <ul className="lp-features">
+            {[
+              { Icon: Building2, top: 'Manage', bottom: 'Properties' },
+              { Icon: Users, top: 'Keep', bottom: 'Students Aligned' },
+              { Icon: ChartColumn, top: 'Real-time', bottom: 'Visibility' },
+            ].map(({ Icon, top, bottom }) => (
+              <li key={bottom}>
+                <span aria-hidden="true"><Icon /></span>
+                <p>{top}<br />{bottom}</p>
+              </li>
+            ))}
+          </ul>
+        </section>
 
-      <section className="mt-6 rounded-2xl border border-line bg-white/50 p-3" aria-labelledby="demo-heading">
-        <h3 id="demo-heading" className="px-1 pb-2 text-[13px] font-semibold text-bark">Explore with a demo account</h3>
-        <ul className="grid gap-1.5">
-          {personas.map((p) => (
-            <li key={p.user.id}>
-              <button type="button" onClick={() => void demo(p)} disabled={!!personaPending}
-                className="flex w-full items-center gap-3 rounded-xl px-2 py-2 text-left transition-colors hover:bg-sand/70 disabled:opacity-60">
-                <Avatar name={p.user.name} size="sm" />
-                <span className="min-w-0 flex-1">
-                  <span className="block truncate text-sm font-medium text-espresso">{p.user.name}</span>
-                  <span className="block truncate text-xs text-dust">{p.subtitle}</span>
-                </span>
-                <span className="text-xs font-medium text-clay-700">{personaPending === p.user.id ? 'Opening…' : 'Enter'}</span>
+        <section className="lp-card" aria-labelledby="lp-title">
+          <Leaf className="lp-leaf" strokeWidth={0.7} aria-hidden="true" />
+          <Brand centered />
+          <h2 id="lp-title">Welcome Back</h2>
+          <p className="lp-subtitle">Sign in to continue to your account</p>
+
+          <form onSubmit={submit} noValidate>
+            <div className="lp-role-switch" role="radiogroup" aria-label="Sign in as">
+              {ROLE_OPTIONS.map(({ value, label, Icon }) => (
+                <button key={value} type="button" role="radio" aria-checked={role === value}
+                  className={`lp-role-option ${role === value ? 'active' : ''}`}
+                  onClick={() => { setRole(value); setFormError(null); }}>
+                  <Icon aria-hidden="true" />
+                  <span>{label}</span>
+                </button>
+              ))}
+            </div>
+
+            <label htmlFor="lp-identifier">Email or phone number</label>
+            <div className={`lp-field ${errors.identifier ? 'has-error' : ''}`}>
+              <Mail aria-hidden="true" />
+              <input id="lp-identifier" name="identifier" autoComplete="username" inputMode="email"
+                placeholder="Enter your email or phone number" value={identifier} required
+                aria-invalid={!!errors.identifier} aria-describedby={errors.identifier ? 'lp-identifier-error' : undefined}
+                onChange={(e) => { setIdentifier(e.target.value); setErrors((x) => ({ ...x, identifier: '' })); }} />
+              <span className="lp-field-spacer" />
+            </div>
+            {errors.identifier && <p id="lp-identifier-error" className="lp-field-error">{errors.identifier}</p>}
+
+            <label htmlFor="lp-password">Password</label>
+            <div className={`lp-field ${errors.password ? 'has-error' : ''}`}>
+              <LockKeyhole aria-hidden="true" />
+              <input id="lp-password" name="password" type={showPassword ? 'text' : 'password'} autoComplete="current-password"
+                placeholder="Enter your password" value={password} required
+                aria-invalid={!!errors.password} aria-describedby={errors.password ? 'lp-password-error' : undefined}
+                onChange={(e) => { setPassword(e.target.value); setErrors((x) => ({ ...x, password: '' })); }} />
+              <button className="lp-icon-button" type="button" onClick={() => setShowPassword((s) => !s)}
+                aria-label={showPassword ? 'Hide password' : 'Show password'} aria-pressed={showPassword}>
+                {showPassword ? <EyeOff aria-hidden="true" /> : <Eye aria-hidden="true" />}
               </button>
-            </li>
-          ))}
-        </ul>
-      </section>
+            </div>
+            {errors.password && <p id="lp-password-error" className="lp-field-error">{errors.password}</p>}
 
-      <p className="mt-5 text-center text-sm text-dust">
-        Don’t have an account? <Link to="/help#contact" className="font-medium text-clay-700 hover:underline">Contact your hostel admin</Link>
-        <br />Got an invitation? <Link to="/invite/accept?token=demo-invite-2026" className="font-medium text-clay-700 hover:underline">Accept it here</Link>
-      </p>
-    </AuthLayout>
+            <div className="lp-options-row">
+              <label className="lp-remember">
+                <input type="checkbox" checked={remember} onChange={(e) => setRemember(e.target.checked)} />
+                Remember me
+              </label>
+              <Link to="/forgot-password" className="lp-text-link">Forgot password?</Link>
+            </div>
+
+            {formError && <p role="alert" className="lp-form-error">{formError}</p>}
+
+            <button className="lp-login-button" type="submit" disabled={pending} aria-busy={pending}>
+              <span>{pending ? 'Signing in…' : 'Sign in'}</span>
+              <ArrowRight aria-hidden="true" />
+            </button>
+          </form>
+
+          <p className="lp-signup-note">
+            Don’t have an account? <Link to="/help#contact" className="lp-text-link">Contact your hostel admin</Link>
+          </p>
+        </section>
+      </main>
+    </div>
   );
 }
