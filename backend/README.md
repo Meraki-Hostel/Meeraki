@@ -20,8 +20,9 @@ plus the spine they depend on:
 | Properties | `IPropertyService` | ✅ list (+stats), get, create, update, setStatus |
 | Rooms/Beds | `IRoomService` | ✅ list, create, update, setBedStatus, **assignBed / vacateBed** (transactional) |
 | Students | `IStudentService` | ✅ list, get, me, create, update, setStatus, updateSelf, nextStudentCode |
-| Notifications/Activity | `INotification/IActivityService` | ✅ read + mark-read (created by payment flows) |
-| Complaints, leave, visitors, maintenance, inventory, announcements, events, feedback, documents, analytics, settings, search | their interfaces | ⬜ not yet — each follows the identical recipe (see below). The frontend keeps using the mock for these. |
+| Complaints | `IComplaintService` | ✅ list, get, create (resident), update/triage + assign (staff), comments with staff-only internal notes |
+| Notifications/Activity | `INotification/IActivityService` | ✅ read + mark-read (created by payment and complaint flows) |
+| Leave, visitors, maintenance, inventory, announcements, events, feedback, documents, analytics, settings, search | their interfaces | ⬜ not yet — each follows the identical recipe (see below). The frontend hides these and shows "Not available yet". |
 
 ## The error contract (this is the clever part)
 
@@ -128,11 +129,13 @@ accounts there.
 
 ## Adding the remaining modules (the recipe)
 
-For each (e.g. complaints): add the Prisma model(s) → `*.validation.js` (Zod) →
+For each (e.g. leave): add the Prisma model(s) → `*.validation.js` (Zod) →
 `*.service.js` (logic + `scope.js` tenant checks + `$transaction` for multi-step
-writes) → `*.controller.js` → `*.routes.js` → mount in `routes/index.js` → add an
-HTTP adapter and flip that service from mock to http in `index.ts`. Auth and
-payments are the worked examples to copy.
+writes + `utils/effects.js` for activity, notifications and counters) →
+`*.controller.js` → `*.routes.js` → mount in `routes/index.js` → add an HTTP
+adapter, swap it in for the `unavailable(...)` stand-in in `services/index.ts`
+and add the module to `AVAILABLE` in `lib/features.ts`. Complaints is the
+smallest complete example to copy; auth and payments are the larger ones.
 
 ## Security already wired in
 

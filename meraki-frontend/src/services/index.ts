@@ -1,11 +1,12 @@
 import type {
-  IAnnouncementService, IComplaintService, IDocumentService, IEventService, IFeedbackService, IInventoryService,
+  IAnnouncementService, IDocumentService, IEventService, IFeedbackService, IInventoryService,
   ILeaveService, IMaintenanceService, ISearchService, ISettingsService, IStaffService, IVisitorService, Services,
 } from './interfaces';
 import { httpAuthService, httpPaymentService } from './http/auth-and-payments';
 import { httpPropertyService, httpRoomService, httpStudentService } from './http/spine';
 import { httpActivityService, httpNotificationService } from './http/misc';
 import { httpAnalyticsService } from './http/analytics';
+import { httpComplaintService } from './http/complaints';
 import { unavailable } from './unavailable';
 
 /**
@@ -28,9 +29,9 @@ export const services: Services = {
   notifications: httpNotificationService,
   activity: httpActivityService,
   analytics: httpAnalyticsService, // composed from the endpoints above
+  complaints: httpComplaintService,
 
   // No backend yet:
-  complaints: unavailable<IComplaintService>('Complaints'),
   leave: unavailable<ILeaveService>('Leave'),
   visitors: unavailable<IVisitorService>('Visitors'),
   maintenance: unavailable<IMaintenanceService>('Maintenance'),

@@ -5,13 +5,14 @@ import { withBalance, iso, todayISO, currentPeriod, counted } from "../../utils/
 
 // Compute PropertyStats (mirrors frontend base.ts propertyStats).
 async function statsFor(property, period = currentPeriod()) {
-  const [beds, rooms, charges, payments, students, staff] = await Promise.all([
+  const [beds, rooms, charges, payments, students, staff, openComplaints] = await Promise.all([
     prisma.bed.findMany({ where: { propertyId: property.id }, select: { status: true } }),
     prisma.room.count({ where: { propertyId: property.id } }),
     prisma.rentCharge.findMany({ where: { propertyId: property.id, period } }),
     prisma.payment.findMany({ where: { propertyId: property.id, ...counted }, select: { chargeId: true, amount: true } }),
     prisma.studentProfile.count({ where: { propertyId: property.id, status: { in: ["active", "notice"] } } }),
     property.managerStaffId ? prisma.staffMember.findUnique({ where: { id: property.managerStaffId }, select: { name: true } }) : null,
+    prisma.complaint.count({ where: { propertyId: property.id, status: { in: ["open", "in_progress"] } } }),
   ]);
   const occupied = beds.filter((b) => b.status === "occupied").length;
   const unavailable = beds.filter((b) => b.status === "unavailable").length;
@@ -24,6 +25,7 @@ async function statsFor(property, period = currentPeriod()) {
     students,
     expectedRent: wb.reduce((a, c) => a + c.amount, 0),
     collectedRent: wb.reduce((a, c) => a + Math.min(c.paid, c.amount), 0),
+    openComplaints,
     managerName: staff?.name,
   };
 }

@@ -111,6 +111,31 @@ enum InvitationStatus {
   expired
 }
 
+enum Priority {
+  low
+  medium
+  high
+  urgent
+}
+
+enum ComplaintStatus {
+  open
+  in_progress
+  resolved
+  closed
+}
+
+enum ComplaintCategory {
+  electrical
+  plumbing
+  cleaning
+  internet
+  food
+  furniture
+  security
+  other
+}
+
 // ── Tenancy ──────────────────────────────────────────────────────────────────
 // One operating business. Owners see every property of THEIR organization only;
 // managers and students are tied to one property inside it. The composite
@@ -218,6 +243,7 @@ model Property {
   staff       StaffMember[]
   invitations Invitation[]
   activity    ActivityLog[]
+  complaints  Complaint[]
 
   @@unique([id, orgId]) // target of the same-org composite relations
   @@index([status])
@@ -240,6 +266,7 @@ model Room {
   property Property         @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   beds     Bed[]
   students StudentProfile[]
+  complaints Complaint[]
 
   @@unique([propertyId, number])
   @@index([propertyId])
@@ -298,6 +325,7 @@ model StudentProfile {
   user       User?
   charges    RentCharge[]
   payments   Payment[]
+  complaints Complaint[]
 
   @@index([propertyId, status])
 }
@@ -318,9 +346,67 @@ model StaffMember {
 
   org      Organization @relation(fields: [orgId], references: [id])
   property Property?    @relation(fields: [propertyId, orgId], references: [id, orgId], onDelete: NoAction, onUpdate: NoAction)
+  complaints Complaint[]
 
   @@index([propertyId])
   @@index([orgId])
+}
+
+// ── Requests ─────────────────────────────────────────────────────────────────
+// Raised by a resident, triaged by staff. roomId is the resident's room when the
+// complaint was raised. Comments and status changes are append-only.
+model Complaint {
+  id              String            @id @default(uuid())
+  ticketNo        String            @unique
+  propertyId      String
+  studentId       String
+  roomId          String?
+  category        ComplaintCategory
+  title           String
+  description     String
+  priority        Priority
+  status          ComplaintStatus   @default(open)
+  assigneeStaffId String?
+  attachments     String[]
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  property Property                @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  student  StudentProfile          @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  room     Room?                   @relation(fields: [roomId], references: [id], onDelete: SetNull)
+  assignee StaffMember?            @relation(fields: [assigneeStaffId], references: [id], onDelete: SetNull)
+  comments ComplaintComment[]
+  history  ComplaintStatusChange[]
+
+  @@index([propertyId, status])
+  @@index([studentId])
+}
+
+model ComplaintComment {
+  id          String   @id @default(uuid())
+  complaintId String
+  authorName  String
+  authorRole  Role
+  body        String
+  internal    Boolean  @default(false) // staff-only note; never sent to the resident
+  createdAt   DateTime @default(now())
+
+  complaint Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+
+  @@index([complaintId, createdAt])
+}
+
+model ComplaintStatusChange {
+  id          String          @id @default(uuid())
+  complaintId String
+  status      ComplaintStatus
+  changedBy   String
+  note        String?
+  at          DateTime        @default(now())
+
+  complaint Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+
+  @@index([complaintId, at])
 }
 
 // ── Money ────────────────────────────────────────────────────────────────────
@@ -363,12 +449,12 @@ model Payment {
   charge   RentCharge     @relation(fields: [chargeId], references: [id], onDelete: Cascade)
   student  StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
   property Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  // Also in SQL only (Prisma cannot express it): unique partial index
+  // "Payment_one_pending_per_charge" on (chargeId) WHERE status = 'pending'.
 
   @@index([propertyId, paidOn])
   @@index([studentId])
   @@index([chargeId, status])
-  // Also in SQL only (Prisma cannot express it): unique partial index
-  // "Payment_one_pending_per_charge" on (chargeId) WHERE status = 'pending'.
 }
 
 // Named counters (e.g. receipt sequence) incremented inside transactions.

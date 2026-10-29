@@ -84,17 +84,12 @@ describe("student self-service: login account stays in step", () => {
 });
 
 describe("modules that do not exist yet are omitted, not faked as empty", () => {
-  test("[FAKE-EMPTY] student detail does not return fabricated empty complaint/leave/visitor/document lists", async () => {
+  test("[FAKE-EMPTY] student detail does not return fabricated empty leave/visitor/document lists", async () => {
     const res = await (await as(w.users.managerA)).get(`/students/${w.residentA.id}`);
     assert.equal(res.status, 200);
-    for (const k of ["complaints", "leaves", "visitors", "documents"]) {
+    for (const k of ["leaves", "visitors", "documents"]) {
       assert.equal(k in res.body.data, false, `"${k}" is returned as [] though that module is not implemented`);
     }
-  });
-
-  test("[FAKE-EMPTY] property stats do not report openComplaints: 0 while complaints are unimplemented", async () => {
-    const res = await (await as(w.users.owner)).get(`/properties/${w.A.id}`);
-    assert.equal("openComplaints" in res.body.data.stats, false, "stats.openComplaints is a hard-coded 0");
   });
 });
 

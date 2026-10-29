@@ -18,7 +18,7 @@ npm run dev            # http://localhost:5173
 - **`VITE_API_BASE_URL` is required.** `npm run build` fails without it, and a dev server started without it shows a "not configured" screen. There is no fallback to demo data.
 - Auth, properties, rooms/beds, students, payments, notifications and activity go through `src/services/http/*`. Dashboards are composed from those endpoints.
 - If the server can't be reached, screens show an error with a retry, never cached or invented data.
-- Modules without a backend yet (complaints, leave, visitors, maintenance, inventory, staff, notices, events, feedback, documents, analytics trends, settings, plans, search, emergency alerts) are hidden from the menu, show **Not available yet** at their URL, and their services reject with `NOT_IMPLEMENTED` (`src/lib/features.ts`, `src/services/unavailable.ts`).
+- Modules without a backend yet (leave, visitors, maintenance, inventory, staff, notices, events, feedback, documents, analytics trends, settings, plans, search, emergency alerts) are hidden from the menu, show **Not available yet** at their URL, and their services reject with `NOT_IMPLEMENTED` (`src/lib/features.ts`, `src/services/unavailable.ts`).
 - Local logins come from the backend's dev seed (`npm run db:seed` in `backend/`): `owner@demo.com` / `manager@demo.com` / `student@demo.com`, password `meraki@123`. They exist only in a dev database.
 
 | Command | What it does |
@@ -53,7 +53,7 @@ Pick the matching role tab before signing in, or you'll get a "registered as …
 | Student | `/student/home`, `/student/profile`, `/student/rent`, `/student/complaints`, `/student/leave`, `/student/visitors`, `/student/notices`, `/student/documents`, `/student/feedback`, `/student/emergency` |
 | Shared | `/notifications`, `/profile`, `/help`, `*` (designed 404) |
 
-Routes for modules without a backend (owner analytics, staff, complaints, events, inventory, plans, settings; the manager's complaints, leave, visitors, maintenance, inventory, staff, notices, events, feedback; the student's complaints, leave, visitors, notices, documents, feedback, emergency) are hidden from the menu and show **Not available yet**.
+Routes for modules without a backend (owner analytics, staff, events, inventory, plans, settings; the manager's leave, visitors, maintenance, inventory, staff, notices, events, feedback; the student's leave, visitors, notices, documents, feedback, emergency) are hidden from the menu and show **Not available yet**.
 
 Every route loads directly and survives refresh. Signed-out visits go to `/login` and come back afterwards. Visiting another role's area goes to `/unauthorized`.
 

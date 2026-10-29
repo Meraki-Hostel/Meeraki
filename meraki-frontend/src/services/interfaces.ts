@@ -19,7 +19,7 @@ export interface PropertyStats {
   students: number;
   expectedRent: number;
   collectedRent: number;
-  /** Absent until the complaints module has a backend. */
+  /** Open + in progress. */
   openComplaints?: number;
   managerName?: string;
 }

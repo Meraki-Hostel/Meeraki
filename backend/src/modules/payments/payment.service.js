@@ -4,6 +4,7 @@ import { invalid, notFound, forbidden, conflict, notConfigured } from "../../uti
 import { requireRole, propertyScope, assertPropertyAccess } from "../../utils/scope.js";
 import { withBalance, iso, todayISO, currentPeriod, currentYear, counted } from "../../utils/money.js";
 import { createOrder } from "./payment.gateway.js";
+import { logActivity, notifyStudentUsers, notifyStaffUsers, nextCounter } from "../../utils/effects.js";
 
 const inr = (n) => `₹${Number(n).toLocaleString("en-IN")}`;
 
@@ -25,15 +26,8 @@ async function lookupsFor(rows) {
   };
 }
 
-// Receipt sequence via an atomic counter inside a transaction. A single
-// INSERT … ON CONFLICT is safe even when the counter row does not exist yet
-// (an upsert's read-then-insert is not).
 async function nextReceiptNo(tx) {
-  const [{ value }] = await tx.$queryRaw`
-    INSERT INTO "Counter" ("key", "value") VALUES ('receipt', 1)
-    ON CONFLICT ("key") DO UPDATE SET "value" = "Counter"."value" + 1
-    RETURNING "value"`;
-  return `RCPT-${currentYear()}-${String(Number(value)).padStart(4, "0")}`;
+  return `RCPT-${currentYear()}-${String(await nextCounter(tx, "receipt")).padStart(4, "0")}`;
 }
 
 // Serialises every write against one charge (record, pay-now, webhook), so two
@@ -46,31 +40,6 @@ async function lockCharge(tx, chargeId) {
 async function balanceOf(tx, charge) {
   const paid = await tx.payment.findMany({ where: { chargeId: charge.id, ...counted }, select: { chargeId: true, amount: true } });
   return withBalance(charge, paid, todayISO()).balance;
-}
-
-async function logActivity(tx, auth, actorName, category, message, propertyId, link) {
-  const orgId = propertyId ? (await tx.property.findUnique({ where: { id: propertyId }, select: { orgId: true } })).orgId : auth.orgId;
-  await tx.activityLog.create({
-    data: { orgId, propertyId, actorName, actorRole: auth?.role ?? "system", category, message, link },
-  });
-}
-async function notifyStudentUsers(tx, studentId, title, body, category, link) {
-  const users = await tx.user.findMany({ where: { studentId }, select: { id: true } });
-  if (users.length)
-    await tx.notification.createMany({
-      data: users.map((u) => ({ recipientUserId: u.id, title, body, category, link })),
-    });
-}
-async function notifyStaffUsers(tx, propertyId, title, body, category, managerLink, ownerLink) {
-  const mgrs = await tx.user.findMany({ where: { role: "manager", propertyId }, select: { id: true } });
-  const owners = ownerLink
-    ? await tx.user.findMany({ where: { role: "owner", org: { properties: { some: { id: propertyId } } } }, select: { id: true } })
-    : [];
-  const rows = [
-    ...mgrs.map((u) => ({ recipientUserId: u.id, title, body, category, link: managerLink })),
-    ...owners.map((u) => ({ recipientUserId: u.id, title, body, category, link: ownerLink })),
-  ];
-  if (rows.length) await tx.notification.createMany({ data: rows });
 }
 
 // Inserts a Payment row + receipt number. Caller supplies the resolved amount.

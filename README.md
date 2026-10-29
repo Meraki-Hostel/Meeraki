@@ -32,11 +32,11 @@ Sign in with `owner@demo.com`, `manager@demo.com` or `student@demo.com` (passwor
 
 ## What's on the real API so far
 
-Auth, properties, rooms/beds, students, payments, notifications and activity.
-Complaints, leave, visitors, maintenance, inventory, staff, announcements,
-events, feedback, documents, analytics, settings and search still run on the
-frontend mock (demo data) until their backend modules are built. See
-`backend/README.md` → "Adding the remaining modules".
+Auth, properties, rooms/beds, students, payments, complaints, notifications
+and activity. Leave, visitors, maintenance, inventory, staff, announcements,
+events, feedback, documents, analytics trends, settings and search have no
+backend yet: the app hides them and shows "Not available yet" until their
+modules are built. See `backend/README.md` → "Adding the remaining modules".
 
 ## Working in this repo
 

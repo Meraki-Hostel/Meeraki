@@ -1,13 +1,7 @@
 import * as svc from "./payment.service.js";
 import { ok } from "../../utils/respond.js";
 import { asyncHandler } from "../../utils/asyncHandler.js";
-import { prisma } from "../../config/prisma.js";
-
-// recordedBy / actor name needs the display name; fetch once per write.
-async function actorName(auth) {
-  const u = await prisma.user.findUnique({ where: { id: auth.userId }, select: { name: true } });
-  return u?.name ?? "Staff";
-}
+import { actorName } from "../../utils/effects.js";
 
 export const listCharges = asyncHandler(async (req, res) => ok(res, await svc.listCharges(req.auth, req.query)));
 export const listPayments = asyncHandler(async (req, res) => ok(res, await svc.listPayments(req.auth, req.query)));
