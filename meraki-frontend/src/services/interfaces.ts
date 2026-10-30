@@ -3,7 +3,7 @@ import type {
   ChargeWithBalance, Complaint, ComplaintCategory, ComplaintStatus, DocumentRecord, Feedback, FeedbackCategory, HostelEvent,
   EventCategory, EventStatus, ID, InventoryCategory, InventoryItem, InventoryTransaction, InventoryTxnType, Invitation,
   LeaveRequest, MaintenanceCategory, MaintenanceStatus, MaintenanceTicket, Notification, NotificationCategory,
-  OrganizationSettings, Payment, PaymentMethod, Priority, Property, PropertyStatus, PropertyType, Receipt, Role, Room,
+  OrganizationSettings, Payment, PaymentMethod, PendingOnlinePayment, Priority, Property, PropertyStatus, PropertyType, Receipt, Role, Room,
   RoomStatus, RoomType, Session, Shift, StaffMember, StaffRole, StaffStatus, StudentProfile, StudentStatus, SubscriptionPlan, User,
   UserPreferences, VisitorRequest,
 } from '@/types/domain';
@@ -19,7 +19,8 @@ export interface PropertyStats {
   students: number;
   expectedRent: number;
   collectedRent: number;
-  openComplaints: number;
+  /** Absent until the complaints module has a backend. */
+  openComplaints?: number;
   managerName?: string;
 }
 export type PropertyWithStats = Property & { stats: PropertyStats };
@@ -37,10 +38,11 @@ export interface StudentDetail {
   student: StudentListItem;
   charges: ChargeWithBalance[];
   payments: Payment[];
-  documents: DocumentRecord[];
-  complaints: ComplaintView[];
-  leaves: LeaveView[];
-  visitors: VisitorView[];
+  /** The lists below are absent until their modules have a backend (never a made-up empty list). */
+  documents?: DocumentRecord[];
+  complaints?: ComplaintView[];
+  leaves?: LeaveView[];
+  visitors?: VisitorView[];
 }
 
 export interface ChargeView extends ChargeWithBalance { studentName: string; studentCode: string; roomNumber?: string; propertyName: string }
@@ -59,7 +61,6 @@ export interface StaffView extends StaffMember { propertyName?: string }
 export interface FeedbackView extends Feedback { studentName: string; propertyName: string }
 export interface ActivityView extends ActivityLog { propertyName?: string }
 
-export interface PersonaSummary { user: User; subtitle: string }
 export interface SessionInfo { session: Session; user: User }
 
 export interface SearchResult { id: string; kind: 'student' | 'room' | 'property' | 'complaint' | 'staff' | 'page' | 'notice' | 'payment'; title: string; subtitle: string; link: string }
@@ -100,8 +101,10 @@ export interface OwnerOverview {
 }
 export interface TrendPoint { period: string; label: string; occupancyPct: number; expected: number; collected: number; arrears: number; complaints: number }
 export interface ManagerOverview {
-  property: PropertyWithStats; collection: CollectionSummary; openComplaints: number; urgentComplaints: number;
-  pendingLeaves: number; visitorsToday: number; openMaintenance: number; lowStock: number; departuresThisWeek: number;
+  property: PropertyWithStats; collection: CollectionSummary;
+  /** The rest need modules without a backend yet; absent until they exist. */
+  openComplaints?: number; urgentComplaints?: number;
+  pendingLeaves?: number; visitorsToday?: number; openMaintenance?: number; lowStock?: number; departuresThisWeek?: number;
 }
 export interface FeedbackSummary { average: number; total: number; byCategory: Array<{ category: FeedbackCategory; average: number; count: number }>; distribution: Array<{ rating: number; count: number }> }
 export interface PlanUsage { plan: SubscriptionPlan; plans: SubscriptionPlan[]; properties: number; beds: number; staff: number }
@@ -109,9 +112,7 @@ export interface PlanUsage { plan: SubscriptionPlan; plans: SubscriptionPlan[]; 
 /* ---------------- Services ---------------- */
 export interface IAuthService {
   getSession(): Promise<SessionInfo | null>;
-  listPersonas(): Promise<PersonaSummary[]>;
   loginWithPassword(input: PasswordLoginInput): Promise<SessionInfo>;
-  loginAsPersona(userId: ID): Promise<SessionInfo>;
   logout(): Promise<void>;
   requestPasswordReset(identifier: string): Promise<{ maskedDestination: string }>;
   resetPassword(token: string, password: string): Promise<void>;
@@ -151,7 +152,7 @@ export interface IPaymentService {
   recordPayment(input: RecordPaymentInput): Promise<Payment>;
   getReceipt(paymentId: ID): Promise<Receipt>;
   sendReminders(chargeIds: ID[]): Promise<number>;
-  payNow(chargeId: ID, method: 'upi' | 'card' | 'netbanking'): Promise<Payment>;
+  payNow(chargeId: ID, method: 'upi' | 'card' | 'netbanking'): Promise<Payment | PendingOnlinePayment>;
 }
 export interface IComplaintService {
   list(filters?: { status?: ComplaintStatus; priority?: Priority; propertyId?: ID; category?: ComplaintCategory }): Promise<ComplaintView[]>;
@@ -236,7 +237,6 @@ export interface ISettingsService {
   update(patch: Partial<OrganizationSettings>): Promise<OrganizationSettings>;
   planUsage(): Promise<PlanUsage>;
   changePlan(planId: ID): Promise<PlanUsage>;
-  resetDemoData(): Promise<void>;
 }
 export interface ISearchService { search(query: string): Promise<SearchResult[]> }
 

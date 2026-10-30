@@ -37,7 +37,7 @@ export function StudentWizard({ open, onClose }: { open: boolean; onClose: () =>
   const bed = bedRoom?.beds.find((b) => b.id === f.bedId);
   useEffect(() => { if (bedRoom) setF((x) => ({ ...x, monthlyRent: String(bedRoom.rent) })); }, [bedRoom?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const create = useMutation(services.students.create, { success: (s) => `${s.name} added${f.bedId ? ' and allotted a bed' : ''}. October rent has been raised.`, onSuccess: (s) => { onClose(); navigate(`/manager/students/${s.id}`); } });
+  const create = useMutation(services.students.create, { success: (s) => `${s.name} added${f.bedId ? ' and allotted a bed' : ''}.`, onSuccess: (s) => { onClose(); navigate(`/manager/students/${s.id}`); } });
   useEffect(() => {
     const fe = create.fieldErrors;
     if (!Object.keys(fe).length) return;
@@ -117,7 +117,7 @@ export function StudentWizard({ open, onClose }: { open: boolean; onClose: () =>
             { label: 'Guardian', value: `${f.guardianName} (${f.guardianRelation}) · ${formatPhone(f.guardianPhone)}` }, { label: 'Emergency', value: `${f.emergencyName} · ${formatPhone(f.emergencyPhone)}` },
             { label: 'Bed', value: bed && bedRoom ? `Room ${bedRoom.number}, Bed ${bed.label}` : 'Not allotted yet' }, { label: 'Rent', value: formatINR(Number(f.monthlyRent)) }, { label: 'Move-in', value: formatDate(f.joinedOn) },
           ]} />
-          <p className="rounded-xl bg-sand/60 px-3 py-2 text-xs text-bark">On save: the document checklist is created and October rent is raised as a due.</p>
+          <p className="rounded-xl bg-sand/60 px-3 py-2 text-xs text-bark">On save: the student{f.bedId ? ' and their bed' : ''} are recorded. Rent dues and the document checklist are not created automatically yet.</p>
         </div>
       )}
     </Modal>

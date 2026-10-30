@@ -60,22 +60,34 @@ export function StudentProfilePage() {
 }
 
 type PayMethod = 'upi' | 'card' | 'netbanking';
+// The demo wording is only true for the in-browser mock build.
+const USES_API = Boolean(import.meta.env.VITE_API_BASE_URL);
 function PayNowModal({ charge, onClose, onPaid }: { charge: ChargeWithBalance | null; onClose: () => void; onPaid: (p: Payment) => void }) {
   const [method, setMethod] = useState<PayMethod>('upi');
   const [done, setDone] = useState<Payment | null>(null);
-  useEffect(() => { if (charge) { setDone(null); setMethod('upi'); } }, [charge?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-  const pay = useMutation((id: string) => services.payments.payNow(id, method), { onSuccess: setDone });
+  // The API opened a real gateway order, but this app cannot show Razorpay Checkout yet.
+  const [checkoutUnavailable, setCheckoutUnavailable] = useState(false);
+  useEffect(() => { if (charge) { setDone(null); setCheckoutUnavailable(false); setMethod('upi'); } }, [charge?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pay = useMutation((id: string) => services.payments.payNow(id, method), {
+    onSuccess: (r) => { if ('pending' in r) setCheckoutUnavailable(true); else setDone(r); },
+  });
   if (!charge) return null;
+  // Only a payment the API marks `captured` moved money; the demo and dev mode are simulated.
+  const real = done?.status === 'captured';
+  const title = checkoutUnavailable ? 'Online checkout unavailable' : done ? (real ? 'Payment successful' : 'Simulated payment recorded') : `Pay ${formatPeriod(charge.period)} rent`;
   return (
-    <Modal open onClose={onClose} size="sm" title={done ? 'Payment successful' : `Pay ${formatPeriod(charge.period)} rent`}
-      footer={done ? <><Button variant="secondary" onClick={onClose}>Close</Button><Button icon={<Receipt className="size-4" />} onClick={() => { onPaid(done); onClose(); }}>View receipt</Button></>
+    <Modal open onClose={onClose} size="sm" title={title}
+      footer={checkoutUnavailable ? <Button variant="secondary" onClick={onClose}>Close</Button>
+        : done ? <><Button variant="secondary" onClick={onClose}>Close</Button><Button icon={<Receipt className="size-4" />} onClick={() => { onPaid(done); onClose(); }}>View receipt</Button></>
         : <><Button variant="secondary" onClick={onClose} disabled={pay.pending}>Cancel</Button><Button loading={pay.pending} onClick={() => void pay.run(charge.id)}>{pay.pending ? 'Processing…' : `Pay ${formatINR(charge.balance)}`}</Button></>}>
-      {done ? (
+      {checkoutUnavailable ? (
+        <p className="text-sm text-bark" role="status">Online checkout is not available in the app yet. No money has been taken. Pay at the office and the manager will record it.</p>
+      ) : done ? (
         <div className="flex flex-col items-center text-center" role="status">
           <CheckCircle2 className="size-12 text-moss" aria-hidden />
           <p className="mt-3 font-display text-3xl font-semibold">{formatINR(done.amount)}</p>
           <p className="text-sm text-dust">Receipt {done.receiptNo} · {formatDate(done.paidOn)}</p>
-          <p className="mt-3 text-xs text-dust">Simulated payment. No money moved.</p>
+          {!real && <p className="mt-3 text-xs text-dust">Simulated payment. No money moved.</p>}
         </div>
       ) : (
         <div className="space-y-4">
@@ -83,7 +95,9 @@ function PayNowModal({ charge, onClose, onPaid }: { charge: ChargeWithBalance | 
           <RadioGroup label="Pay with" name="pm" value={method} onChange={setMethod} options={[
             { value: 'upi', label: 'UPI', description: 'Any UPI app' }, { value: 'card', label: 'Debit / credit card' }, { value: 'netbanking', label: 'Net banking' },
           ]} />
-          <p className="flex gap-2 rounded-xl border border-slate-soft/60 bg-slate-wash/60 px-3 py-2 text-xs text-slate-ink"><ShieldCheck className="size-4 shrink-0" aria-hidden />Demo mode: this simulates a successful payment. You will never be asked for card numbers, UPI PIN or bank passwords here.</p>
+          <p className="flex gap-2 rounded-xl border border-slate-soft/60 bg-slate-wash/60 px-3 py-2 text-xs text-slate-ink"><ShieldCheck className="size-4 shrink-0" aria-hidden />{USES_API
+            ? 'Meraki never asks for card numbers, UPI PIN or bank passwords.'
+            : 'Demo mode: this simulates a successful payment. You will never be asked for card numbers, UPI PIN or bank passwords here.'}</p>
         </div>
       )}
     </Modal>

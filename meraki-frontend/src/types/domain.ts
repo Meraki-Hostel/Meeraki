@@ -202,6 +202,11 @@ export interface RentCharge {
 }
 
 export type PaymentMethod = 'upi' | 'cash' | 'bank_transfer' | 'card';
+/**
+ * Set by the API. `captured` = money received; `simulated` = local-development payment,
+ * no money moved. Pending/failed gateway attempts are never returned as payments.
+ */
+export type PaymentStatus = 'captured' | 'simulated';
 export interface Payment {
   id: ID;
   chargeId: ID;
@@ -214,6 +219,14 @@ export interface Payment {
   receiptNo: string;
   recordedBy: string;
   note?: string;
+  status?: PaymentStatus;
+}
+
+/** Pay-now answer when a real gateway order was opened: nothing is paid until the gateway confirms. */
+export interface PendingOnlinePayment {
+  pending: true;
+  order: { id: string; amount: number; currency: 'INR' };
+  keyId: string;
 }
 
 /** Derived read model: a charge with its payment totals. */
@@ -458,35 +471,4 @@ export interface MonthlySnapshot {
   expected: number;
   collected: number;
   complaints: number;
-}
-
-/* ---------- Persisted demo state ---------- */
-export interface DemoState {
-  organization: Organization;
-  settings: OrganizationSettings;
-  plans: SubscriptionPlan[];
-  users: User[];
-  invitations: Invitation[];
-  session: Session | null;
-  properties: Property[];
-  rooms: Room[];
-  beds: Bed[];
-  students: StudentProfile[];
-  staff: StaffMember[];
-  charges: RentCharge[];
-  payments: Payment[];
-  complaints: Complaint[];
-  leaves: LeaveRequest[];
-  visitors: VisitorRequest[];
-  maintenance: MaintenanceTicket[];
-  inventory: InventoryItem[];
-  inventoryTxns: InventoryTransaction[];
-  announcements: Announcement[];
-  events: HostelEvent[];
-  feedback: Feedback[];
-  documents: DocumentRecord[];
-  notifications: Notification[];
-  activity: ActivityLog[];
-  history: MonthlySnapshot[];
-  counters: Record<string, number>;
 }

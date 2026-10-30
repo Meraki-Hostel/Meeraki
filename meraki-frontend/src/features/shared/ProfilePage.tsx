@@ -25,7 +25,7 @@ export function ProfilePage() {
 
   return (
     <>
-      <PageHeader title="My account" subtitle="Your demo persona, contact details and preferences." />
+      <PageHeader title="My account" subtitle="Your contact details and preferences." />
       <div className="grid gap-5 lg:grid-cols-3">
         <Card className="p-5 lg:col-span-1">
           <div className="flex flex-col items-center text-center">
@@ -38,7 +38,7 @@ export function ProfilePage() {
             <DescriptionList cols={1} items={[
               { label: 'Email', value: user.email },
               { label: 'Phone', value: formatPhone(user.phone) },
-              { label: 'Signed in', value: info ? `${formatDateTime(info.session.startedAt)} · ${info.session.method === 'demo' ? 'Demo persona' : 'Password (demo)'}` : '—' },
+              { label: 'Signed in', value: info ? `${formatDateTime(info.session.startedAt)} · Password` : '—' },
             ]} />
           </div>
           {user.role === 'student' && <ButtonLink to="/student/profile" variant="secondary" className="mt-5 w-full">Edit resident details</ButtonLink>}
@@ -57,10 +57,10 @@ export function ProfilePage() {
             </form>
           </Card>
           <Card className="p-5">
-            <CardHeader title="Preferences" subtitle="Saved for this demo persona." />
+            <CardHeader title="Preferences" subtitle="Saved to your account." />
             <div className="mt-2 divide-y divide-line/70">
-              <Switch label="Email digest" description="A daily summary of activity at 8 am." checked={user.preferences.emailDigest} onChange={(v) => void pref.run({ preferences: { emailDigest: v } })} />
-              <Switch label="SMS alerts" description="Urgent alerts by SMS (not sent in demo mode)." checked={user.preferences.smsAlerts} onChange={(v) => void pref.run({ preferences: { smsAlerts: v } })} />
+              <Switch label="Email digest" description="Saved for later. Email delivery isn’t set up yet, so no digest is sent." checked={user.preferences.emailDigest} onChange={(v) => void pref.run({ preferences: { emailDigest: v } })} />
+              <Switch label="SMS alerts" description="Saved for later. SMS isn’t set up yet, so no alerts are sent." checked={user.preferences.smsAlerts} onChange={(v) => void pref.run({ preferences: { smsAlerts: v } })} />
               <Switch label="Compact tables" description="Show more rows per page in lists." checked={user.preferences.compactTables} onChange={(v) => void pref.run({ preferences: { compactTables: v } })} />
             </div>
           </Card>

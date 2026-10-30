@@ -1,41 +1,48 @@
-import type { Services } from './interfaces';
-import { mockAuthService } from './mock/auth';
-import { mockPropertyService } from './mock/properties';
-import { mockRoomService } from './mock/rooms';
-import { mockStudentService } from './mock/students';
-import { mockPaymentService } from './mock/payments';
-import { mockComplaintService, mockLeaveService, mockVisitorService } from './mock/requests';
-import { mockInventoryService, mockMaintenanceService, mockStaffService } from './mock/operations';
-import { mockActivityService, mockAnnouncementService, mockDocumentService, mockEventService, mockFeedbackService, mockNotificationService } from './mock/communication';
-import { mockAnalyticsService, mockSearchService, mockSettingsService } from './mock/insights';
+import type {
+  IAnnouncementService, IComplaintService, IDocumentService, IEventService, IFeedbackService, IInventoryService,
+  ILeaveService, IMaintenanceService, ISearchService, ISettingsService, IStaffService, IVisitorService, Services,
+} from './interfaces';
+import { httpAuthService, httpPaymentService } from './http/auth-and-payments';
+import { httpPropertyService, httpRoomService, httpStudentService } from './http/spine';
+import { httpActivityService, httpNotificationService } from './http/misc';
+import { httpAnalyticsService } from './http/analytics';
+import { unavailable } from './unavailable';
 
 /**
- * Service container. To integrate a backend, implement the same interfaces
- * with HTTP adapters (e.g. `src/services/http/*`) and swap them in here.
- * TODO(backend): choose implementation via `import.meta.env.VITE_API_BASE_URL`.
+ * Service container for the real application. It talks only to the API at
+ * VITE_API_BASE_URL; there is no mock fallback and no per-module switching.
+ * Modules without a backend yet are explicit "unavailable" stand-ins (see
+ * lib/features.ts). The mock-only prototype lives in /prototype.
  */
+export const apiBaseUrl: string | undefined = import.meta.env.VITE_API_BASE_URL || undefined;
+export const configError: string | null = apiBaseUrl
+  ? null
+  : 'VITE_API_BASE_URL is not set, so the app has no server to talk to.';
+
 export const services: Services = {
-  auth: mockAuthService,
-  properties: mockPropertyService,
-  rooms: mockRoomService,
-  students: mockStudentService,
-  payments: mockPaymentService,
-  complaints: mockComplaintService,
-  leave: mockLeaveService,
-  visitors: mockVisitorService,
-  maintenance: mockMaintenanceService,
-  inventory: mockInventoryService,
-  announcements: mockAnnouncementService,
-  events: mockEventService,
-  staff: mockStaffService,
-  feedback: mockFeedbackService,
-  documents: mockDocumentService,
-  notifications: mockNotificationService,
-  activity: mockActivityService,
-  analytics: mockAnalyticsService,
-  settings: mockSettingsService,
-  search: mockSearchService,
+  auth: httpAuthService,
+  properties: httpPropertyService,
+  rooms: httpRoomService,
+  students: httpStudentService,
+  payments: httpPaymentService,
+  notifications: httpNotificationService,
+  activity: httpActivityService,
+  analytics: httpAnalyticsService, // composed from the endpoints above
+
+  // No backend yet:
+  complaints: unavailable<IComplaintService>('Complaints'),
+  leave: unavailable<ILeaveService>('Leave'),
+  visitors: unavailable<IVisitorService>('Visitors'),
+  maintenance: unavailable<IMaintenanceService>('Maintenance'),
+  inventory: unavailable<IInventoryService>('Inventory'),
+  announcements: unavailable<IAnnouncementService>('Notices'),
+  events: unavailable<IEventService>('Events'),
+  staff: unavailable<IStaffService>('Staff'),
+  feedback: unavailable<IFeedbackService>('Feedback'),
+  documents: unavailable<IDocumentService>('Documents'),
+  settings: unavailable<ISettingsService>('Settings'),
+  search: unavailable<ISearchService>('Search'),
 };
 
-export { subscribeToData, dataRecoveredFromCorruption } from './subscription';
+export { subscribeToData } from './subscription';
 export type * from './interfaces';

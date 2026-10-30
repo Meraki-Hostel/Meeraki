@@ -9,6 +9,8 @@ import { LoginPage } from '@/features/auth/LoginPage';
 import { ForgotPasswordPage, InviteAcceptPage, ResetPasswordPage } from '@/features/auth/RecoveryPages';
 import { NotFoundPage, UnauthorizedPage } from '@/features/shared/SystemPages';
 import { lazyNamed } from './lazy';
+import { NotAvailablePage } from '@/features/shared/NotAvailablePage';
+import { isAvailable, type Feature } from '@/lib/features';
 
 const owner = () => import('@/features/owner');
 const manager = () => import('@/features/manager');
@@ -37,6 +39,8 @@ const S = {
 const Shared = { Notifications: lazyNamed(shared, 'NotificationsPage'), Profile: lazyNamed(shared, 'ProfilePage'), Help: lazyNamed(shared, 'HelpPage') };
 
 const page = (el: ReactNode) => <Suspense fallback={<PageSkeleton />}>{el}</Suspense>;
+/** A module without a backend renders "Not available yet" instead of its (demo-only) screen. */
+const gated = (feature: Feature, el: ReactNode) => (isAvailable(feature) ? page(el) : <NotAvailablePage feature={feature} />);
 
 /** /help is reachable signed-out (from the login page) and signed-in (inside the shell). */
 function HelpEntry() {
@@ -73,14 +77,14 @@ export function AppRoutes() {
         <Route path="properties" element={page(<O.Properties />)} />
         <Route path="properties/new" element={page(<O.PropertyNew />)} />
         <Route path="properties/:propertyId" element={page(<O.PropertyDetail />)} />
-        <Route path="analytics" element={page(<O.Analytics />)} />
+        <Route path="analytics" element={gated('analytics', <O.Analytics />)} />
         <Route path="finance" element={page(<O.Finance />)} />
-        <Route path="staff" element={page(<O.Staff />)} />
-        <Route path="complaints" element={page(<O.Complaints />)} />
-        <Route path="events" element={page(<O.Events />)} />
-        <Route path="inventory" element={page(<O.Inventory />)} />
-        <Route path="plans" element={page(<O.Plans />)} />
-        <Route path="settings" element={page(<O.Settings />)} />
+        <Route path="staff" element={gated('staff', <O.Staff />)} />
+        <Route path="complaints" element={gated('complaints', <O.Complaints />)} />
+        <Route path="events" element={gated('events', <O.Events />)} />
+        <Route path="inventory" element={gated('inventory', <O.Inventory />)} />
+        <Route path="plans" element={gated('plans', <O.Plans />)} />
+        <Route path="settings" element={gated('settings', <O.Settings />)} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
 
@@ -91,15 +95,15 @@ export function AppRoutes() {
         <Route path="students" element={page(<M.Students />)} />
         <Route path="students/:studentId" element={page(<M.Student />)} />
         <Route path="payments" element={page(<M.Payments />)} />
-        <Route path="complaints" element={page(<M.Complaints />)} />
-        <Route path="leave" element={page(<M.Leave />)} />
-        <Route path="visitors" element={page(<M.Visitors />)} />
-        <Route path="maintenance" element={page(<M.Maintenance />)} />
-        <Route path="inventory" element={page(<M.Inventory />)} />
-        <Route path="staff" element={page(<M.Staff />)} />
-        <Route path="announcements" element={page(<M.Announcements />)} />
-        <Route path="events" element={page(<M.Events />)} />
-        <Route path="feedback" element={page(<M.Feedback />)} />
+        <Route path="complaints" element={gated('complaints', <M.Complaints />)} />
+        <Route path="leave" element={gated('leave', <M.Leave />)} />
+        <Route path="visitors" element={gated('visitors', <M.Visitors />)} />
+        <Route path="maintenance" element={gated('maintenance', <M.Maintenance />)} />
+        <Route path="inventory" element={gated('inventory', <M.Inventory />)} />
+        <Route path="staff" element={gated('staff', <M.Staff />)} />
+        <Route path="announcements" element={gated('announcements', <M.Announcements />)} />
+        <Route path="events" element={gated('events', <M.Events />)} />
+        <Route path="feedback" element={gated('feedback', <M.Feedback />)} />
         <Route path="activity" element={page(<M.Activity />)} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
@@ -109,13 +113,13 @@ export function AppRoutes() {
         <Route path="home" element={page(<S.Home />)} />
         <Route path="profile" element={page(<S.Profile />)} />
         <Route path="rent" element={page(<S.Rent />)} />
-        <Route path="complaints" element={page(<S.Complaints />)} />
-        <Route path="leave" element={page(<S.Leave />)} />
-        <Route path="visitors" element={page(<S.Visitors />)} />
-        <Route path="notices" element={page(<S.Notices />)} />
-        <Route path="documents" element={page(<S.Documents />)} />
-        <Route path="feedback" element={page(<S.Feedback />)} />
-        <Route path="emergency" element={page(<S.Emergency />)} />
+        <Route path="complaints" element={gated('complaints', <S.Complaints />)} />
+        <Route path="leave" element={gated('leave', <S.Leave />)} />
+        <Route path="visitors" element={gated('visitors', <S.Visitors />)} />
+        <Route path="notices" element={gated('announcements', <S.Notices />)} />
+        <Route path="documents" element={gated('documents', <S.Documents />)} />
+        <Route path="feedback" element={gated('feedback', <S.Feedback />)} />
+        <Route path="emergency" element={gated('emergency', <S.Emergency />)} />
         <Route path="*" element={<NotFoundPage />} />
       </Route>
 
