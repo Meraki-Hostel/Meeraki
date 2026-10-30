@@ -102,7 +102,7 @@ export function Switch({ checked, onChange, label, description, disabled }: { ch
       </div>
       <button id={id} role="switch" type="button" aria-checked={checked} disabled={disabled} onClick={() => onChange(!checked)}
         className={cn('relative h-6 w-11 shrink-0 rounded-full transition-colors', checked ? 'bg-clay-600' : 'bg-line-strong')}>
-        <span className={cn('absolute top-0.5 size-5 rounded-full bg-white shadow transition-transform', checked ? 'translate-x-[22px]' : 'translate-x-0.5')} />
+        <span className={cn('absolute left-0 top-0.5 size-5 rounded-full bg-white shadow transition-transform', checked ? 'translate-x-[22px]' : 'translate-x-0.5')} />
       </button>
     </div>
   );
