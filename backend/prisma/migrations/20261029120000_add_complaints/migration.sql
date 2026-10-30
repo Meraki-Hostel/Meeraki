@@ -41,7 +41,7 @@ CREATE TABLE "ComplaintComment" (
 );
 
 -- CreateTable
-CREATE TABLE "ComplaintStatusChange" (
+CREATE TABLE "ComplaintStatusHistory" (
     "id" TEXT NOT NULL,
     "complaintId" TEXT NOT NULL,
     "status" "ComplaintStatus" NOT NULL,
@@ -49,7 +49,7 @@ CREATE TABLE "ComplaintStatusChange" (
     "note" TEXT,
     "at" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
-    CONSTRAINT "ComplaintStatusChange_pkey" PRIMARY KEY ("id")
+    CONSTRAINT "ComplaintStatusHistory_pkey" PRIMARY KEY ("id")
 );
 
 -- CreateIndex
@@ -65,7 +65,7 @@ CREATE INDEX "Complaint_studentId_idx" ON "Complaint"("studentId");
 CREATE INDEX "ComplaintComment_complaintId_createdAt_idx" ON "ComplaintComment"("complaintId", "createdAt");
 
 -- CreateIndex
-CREATE INDEX "ComplaintStatusChange_complaintId_at_idx" ON "ComplaintStatusChange"("complaintId", "at");
+CREATE INDEX "ComplaintStatusHistory_complaintId_at_idx" ON "ComplaintStatusHistory"("complaintId", "at");
 
 -- AddForeignKey
 ALTER TABLE "Complaint" ADD CONSTRAINT "Complaint_propertyId_fkey" FOREIGN KEY ("propertyId") REFERENCES "Property"("id") ON DELETE CASCADE ON UPDATE CASCADE;
@@ -83,5 +83,5 @@ ALTER TABLE "Complaint" ADD CONSTRAINT "Complaint_assigneeStaffId_fkey" FOREIGN 
 ALTER TABLE "ComplaintComment" ADD CONSTRAINT "ComplaintComment_complaintId_fkey" FOREIGN KEY ("complaintId") REFERENCES "Complaint"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "ComplaintStatusChange" ADD CONSTRAINT "ComplaintStatusChange_complaintId_fkey" FOREIGN KEY ("complaintId") REFERENCES "Complaint"("id") ON DELETE CASCADE ON UPDATE CASCADE;
+ALTER TABLE "ComplaintStatusHistory" ADD CONSTRAINT "ComplaintStatusHistory_complaintId_fkey" FOREIGN KEY ("complaintId") REFERENCES "Complaint"("id") ON DELETE CASCADE ON UPDATE CASCADE;
 

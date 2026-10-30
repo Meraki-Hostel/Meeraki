@@ -376,7 +376,7 @@ model Complaint {
   room     Room?                   @relation(fields: [roomId], references: [id], onDelete: SetNull)
   assignee StaffMember?            @relation(fields: [assigneeStaffId], references: [id], onDelete: SetNull)
   comments ComplaintComment[]
-  history  ComplaintStatusChange[]
+  history  ComplaintStatusHistory[]
 
   @@index([propertyId, status])
   @@index([studentId])
@@ -396,7 +396,7 @@ model ComplaintComment {
   @@index([complaintId, createdAt])
 }
 
-model ComplaintStatusChange {
+model ComplaintStatusHistory {
   id          String          @id @default(uuid())
   complaintId String
   status      ComplaintStatus
