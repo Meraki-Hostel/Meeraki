@@ -1,12 +1,12 @@
 import { http } from './client';
 import { ServiceError } from '../errors';
-import type { CollectionSummary, ComplaintView, IAnalyticsService, PropertyWithStats } from '../interfaces';
+import type { CollectionSummary, ComplaintView, IAnalyticsService, LeaveView, PropertyWithStats } from '../interfaces';
 import { currentPeriod, previousPeriod } from '@/lib/clock';
 
 /**
  * Dashboard figures composed from real API data only: properties with their
- * live stats, payment summaries and complaints. Figures that need modules
- * without a backend (leave, visitors, maintenance, inventory) are left
+ * live stats, payment summaries, complaints and leave. Figures that need
+ * modules without a backend (visitors, maintenance, inventory) are left
  * undefined so screens omit them rather than show a made-up zero.
  */
 const properties = () => http.get<PropertyWithStats[]>('/properties');
@@ -31,8 +31,9 @@ export const httpAnalyticsService: IAnalyticsService = {
   },
   propertyComparison: properties,
   async managerOverview() {
-    const [props, collection, urgent] = await Promise.all([
+    const [props, collection, urgent, pendingLeave] = await Promise.all([
       properties(), summary(currentPeriod()), http.get<ComplaintView[]>('/complaints', { priority: 'urgent' }),
+      http.get<LeaveView[]>('/leave', { status: 'pending' }),
     ]);
     const property = props[0];
     if (!property) throw new ServiceError('NOT_FOUND', 'No hostel is linked to your account.');
@@ -40,6 +41,7 @@ export const httpAnalyticsService: IAnalyticsService = {
       property, collection,
       openComplaints: property.stats.openComplaints,
       urgentComplaints: urgent.filter((c) => c.status === 'open' || c.status === 'in_progress').length,
+      pendingLeaves: pendingLeave.length,
     };
   },
   trends: () => Promise.reject(new ServiceError('NOT_IMPLEMENTED', "Analytics trends aren't available yet.")),

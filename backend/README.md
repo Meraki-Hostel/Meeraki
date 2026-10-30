@@ -22,7 +22,8 @@ plus the spine they depend on:
 | Students | `IStudentService` | ✅ list, get, me, create, update, setStatus, updateSelf, nextStudentCode |
 | Complaints | `IComplaintService` | ✅ list, get, create (resident), update/triage + assign (staff), comments with staff-only internal notes |
 | Notifications/Activity | `INotification/IActivityService` | ✅ read + mark-read (created by payment and complaint flows) |
-| Leave, visitors, maintenance, inventory, announcements, events, feedback, documents, analytics, settings, search | their interfaces | ⬜ not yet — each follows the identical recipe (see below). The frontend hides these and shows "Not available yet". |
+| Leave | `ILeaveService` | ✅ list, create (resident: date, overlap and 30-day checks), decide (staff), cancel (resident); pending-only, row-locked |
+| Visitors, maintenance, inventory, announcements, events, feedback, documents, analytics, settings, search | their interfaces | ⬜ not yet — each follows the identical recipe (see below). The frontend hides these and shows "Not available yet". |
 
 ## The error contract (this is the clever part)
 
@@ -129,7 +130,7 @@ accounts there.
 
 ## Adding the remaining modules (the recipe)
 
-For each (e.g. leave): add the Prisma model(s) → `*.validation.js` (Zod) →
+For each (e.g. visitors): add the Prisma model(s) → `*.validation.js` (Zod) →
 `*.service.js` (logic + `scope.js` tenant checks + `$transaction` for multi-step
 writes + `utils/effects.js` for activity, notifications and counters) →
 `*.controller.js` → `*.routes.js` → mount in `routes/index.js` → add an HTTP

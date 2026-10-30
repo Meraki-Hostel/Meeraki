@@ -136,6 +136,13 @@ enum ComplaintCategory {
   other
 }
 
+enum LeaveStatus {
+  pending
+  approved
+  rejected
+  cancelled
+}
+
 // ── Tenancy ──────────────────────────────────────────────────────────────────
 // One operating business. Owners see every property of THEIR organization only;
 // managers and students are tied to one property inside it. The composite
@@ -244,6 +251,7 @@ model Property {
   invitations Invitation[]
   activity    ActivityLog[]
   complaints  Complaint[]
+  leaves      LeaveRequest[]
 
   @@unique([id, orgId]) // target of the same-org composite relations
   @@index([status])
@@ -326,6 +334,7 @@ model StudentProfile {
   charges    RentCharge[]
   payments   Payment[]
   complaints Complaint[]
+  leaves     LeaveRequest[]
 
   @@index([propertyId, status])
 }
@@ -407,6 +416,31 @@ model ComplaintStatusHistory {
   complaint Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
 
   @@index([complaintId, at])
+}
+
+// A resident's request to be away from the hostel. from/to are calendar dates
+// (stored at UTC midnight, returned as YYYY-MM-DD). Decided once, by staff.
+model LeaveRequest {
+  id             String      @id @default(uuid())
+  studentId      String
+  propertyId     String
+  from           DateTime
+  to             DateTime
+  destination    String
+  contactPhone   String
+  reason         String
+  status         LeaveStatus @default(pending)
+  decisionReason String?
+  decidedBy      String?
+  decidedAt      DateTime?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  student  StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  property Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, status])
+  @@index([studentId, status])
 }
 
 // ── Money ────────────────────────────────────────────────────────────────────

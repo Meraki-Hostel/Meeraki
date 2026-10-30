@@ -1,0 +1,12 @@
+import { Router } from "express";
+import * as c from "./leave.controller.js";
+import { authenticate } from "../../middleware/authenticate.js";
+import { validate } from "../../middleware/validate.js";
+import { createSchema, decideSchema, listSchema } from "./leave.validation.js";
+const r = Router();
+r.use(authenticate);
+r.get("/", validate(listSchema, "query"), c.list);
+r.post("/", validate(createSchema), c.create);
+r.post("/:id/decision", validate(decideSchema), c.decide);
+r.post("/:id/cancel", c.cancel);
+export default r;
