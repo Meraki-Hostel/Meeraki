@@ -1,6 +1,7 @@
 import { prisma } from "../../config/prisma.js";
 import { iso } from "../../utils/money.js";
 import { assertPropertyAccess } from "../../utils/scope.js";
+import { notFound } from "../../utils/ApiError.js";
 
 export async function listNotifications(auth, filters = {}) {
   const where = { recipientUserId: auth.userId };
@@ -10,7 +11,9 @@ export async function listNotifications(auth, filters = {}) {
   return rows.map((n) => ({ ...n, createdAt: n.createdAt.toISOString() }));
 }
 export async function markNotificationRead(auth, id, read) {
-  await prisma.notification.updateMany({ where: { id, recipientUserId: auth.userId }, data: { read } });
+  // Only the recipient can change it; any other id (unknown or someone else's) is NOT_FOUND.
+  const { count } = await prisma.notification.updateMany({ where: { id, recipientUserId: auth.userId }, data: { read } });
+  if (!count) throw notFound("Notification");
 }
 export async function markAllNotificationsRead(auth) {
   await prisma.notification.updateMany({ where: { recipientUserId: auth.userId, read: false }, data: { read: true } });
