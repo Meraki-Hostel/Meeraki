@@ -37,10 +37,7 @@ export const httpPaymentService: IPaymentService = {
   summary: (filters = {}) => http.get<CollectionSummary>('/payments/summary', filters),
   recordPayment: (input: RecordPaymentInput) => http.post<Payment>('/payments/record', input),
   getReceipt: (paymentId: ID) => http.get<Receipt>(`/payments/${paymentId}/receipt`),
-  sendReminders: async (chargeIds: ID[]) => {
-    const r = await http.post<number>('/payments/reminders', { chargeIds });
-    return r as unknown as number;
-  },
+    sendReminders: (chargeIds: ID[]) => http.post<number>('/payments/reminders', { chargeIds }),
   // PAYMENT_MODE=disabled → throws NOT_CONFIGURED. simulated (dev only) → a Payment with
   // status 'simulated'. razorpay → PendingOnlinePayment: nothing is paid until the signed
   // webhook confirms; Razorpay Checkout is not wired into this app yet.
