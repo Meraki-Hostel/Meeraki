@@ -53,6 +53,7 @@ describe("requesting leave", () => {
       [{ to: inDays(40) }, "to"],
       [{ contactPhone: "12345" }, "contactPhone"],
       [{ from: "2026-02-31" }, "from"],
+      [{ from: "tomorrow" }, "from"],
       [{ reason: "x" }, "reason"],
     ];
     for (const [over, field] of cases) {

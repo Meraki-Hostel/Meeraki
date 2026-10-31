@@ -1,9 +1,13 @@
 import { z } from "zod";
 import { iso } from "../../utils/money.js";
 
-// A real calendar date in YYYY-MM-DD (rejects 2026-02-31).
-const isoDate = (message) =>
-  z.string().regex(/^\d{4}-\d{2}-\d{2}$/, message).refine((s) => iso(new Date(`${s}T00:00:00.000Z`)) === s, message);
+// A real calendar date in YYYY-MM-DD (rejects 2026-02-31). The refine also runs
+// when the regex fails, so it must not throw on garbage like "tomorrow".
+const isRealDate = (s) => {
+  const d = new Date(`${s}T00:00:00.000Z`);
+  return !Number.isNaN(d.getTime()) && iso(d) === s;
+};
+const isoDate = (message) => z.string().regex(/^\d{4}-\d{2}-\d{2}$/, message).refine(isRealDate, message);
 
 // Field rules only. Rules that need "today" or other requests live in the service.
 export const createSchema = z.object({
