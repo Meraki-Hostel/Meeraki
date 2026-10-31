@@ -113,6 +113,28 @@ async function allocateStudentCode(tx) {
 const codeTaken = () =>
   new ApiError("CONFLICT", "That student code is already in use.", { studentCode: "That student code is already in use." });
 
+const phoneTaken = () =>
+  new ApiError("CONFLICT", "That mobile number is already registered to another resident.", { phone: "That mobile number is already registered to another resident." });
+
+// Valid numbers are stored as their 10 digits, like the sign-in account's copy.
+const storedPhone = (phone) => (isIndianPhone(phone) ? normalizePhone(phone) : phone);
+
+// A mobile number belongs to one current resident per organization (moved-out
+// residents don't count). Older rows may hold formatted numbers ("98765 43210"),
+// so the comparison normalises in SQL. The advisory lock makes two simultaneous
+// saves of the same number queue up, so they cannot both pass the check.
+async function assertPhoneFree(tx, orgId, phone, exceptStudentId = "") {
+  const digits = normalizePhone(phone);
+  if (!digits) return;
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`student-phone:${orgId}:${digits}`}))`;
+  const [clash] = await tx.$queryRaw`
+    SELECT s."id" FROM "StudentProfile" s JOIN "Property" p ON p."id" = s."propertyId"
+    WHERE p."orgId" = ${orgId} AND s."status" <> 'moved_out' AND s."id" <> ${exceptStudentId}
+      AND right(regexp_replace(s."phone", '[^0-9]', '', 'g'), 10) = ${digits}
+    LIMIT 1`;
+  if (clash) throw phoneTaken();
+}
+
 // A student's sign-in account mirrors their contact details; keep both in step.
 async function syncLogin(tx, studentId, { email, phone }) {
   const data = {};
@@ -150,10 +172,11 @@ export async function create(auth, input, actorName = "Staff") {
 
   let invitation = null;
   const created = await prisma.$transaction(async (tx) => {
+    await assertPhoneFree(tx, auth.orgId, input.phone);
     const studentCode = requestedCode || (await allocateStudentCode(tx));
     const s = await tx.studentProfile.create({
       data: {
-        studentCode, name: input.name, email: input.email, phone: input.phone,
+        studentCode, name: input.name, email: input.email, phone: storedPhone(input.phone),
         gender: input.gender, dob: new Date(input.dob), college: input.college, course: input.course,
         year: input.year, propertyId, status: input.bedId ? "active" : "pending",
         joinedOn: new Date(input.joinedOn), monthlyRent: input.monthlyRent, address: input.address ?? "",
@@ -208,7 +231,9 @@ export async function update(auth, id, patch) {
     if (data.studentCode !== s.studentCode
       && (await prisma.studentProfile.findUnique({ where: { studentCode: data.studentCode }, select: { id: true } }))) throw codeTaken();
   }
+  if (data.phone !== undefined) data.phone = storedPhone(data.phone);
   const updated = await prisma.$transaction(async (tx) => {
+    if (data.phone !== undefined) await assertPhoneFree(tx, auth.orgId, data.phone, id);
     const row = await tx.studentProfile.update({ where: { id }, data });
     await syncLogin(tx, id, { email: patch.email, phone: patch.phone });
     return row;
@@ -245,7 +270,9 @@ export async function updateSelf(auth, patch) {
   requireRole(auth, "student");
   const allowed = (({ email, phone, address, emergencyName, emergencyPhone, bloodGroup }) =>
     ({ email, phone, address, emergencyName, emergencyPhone, bloodGroup }))(patch);
+  if (allowed.phone !== undefined) allowed.phone = storedPhone(allowed.phone);
   const updated = await prisma.$transaction(async (tx) => {
+    if (allowed.phone !== undefined) await assertPhoneFree(tx, auth.orgId, allowed.phone, auth.studentId);
     const row = await tx.studentProfile.update({ where: { id: auth.studentId }, data: allowed });
     await syncLogin(tx, auth.studentId, { email: allowed.email, phone: allowed.phone });
     return row;
