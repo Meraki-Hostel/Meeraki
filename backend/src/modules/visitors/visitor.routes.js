@@ -1,0 +1,15 @@
+import { Router } from "express";
+import * as c from "./visitor.controller.js";
+import { authenticate } from "../../middleware/authenticate.js";
+import { validate } from "../../middleware/validate.js";
+import { createSchema, walkInSchema, decideSchema, listSchema } from "./visitor.validation.js";
+const r = Router();
+r.use(authenticate);
+r.get("/", validate(listSchema, "query"), c.list);
+r.post("/", validate(createSchema), c.create);
+r.post("/walk-ins", validate(walkInSchema), c.createWalkIn);
+r.post("/:id/decision", validate(decideSchema), c.decide);
+r.post("/:id/check-in", c.checkIn);
+r.post("/:id/check-out", c.checkOut);
+r.post("/:id/cancel", c.cancel);
+export default r;

@@ -23,7 +23,7 @@ export const FEATURE_LABEL = {
 } as const;
 export type Feature = keyof typeof FEATURE_LABEL;
 
-const AVAILABLE = new Set<Feature>(['complaints', 'leave']);
+const AVAILABLE = new Set<Feature>(['complaints', 'leave', 'visitors']);
 export const isAvailable = (f: Feature): boolean => AVAILABLE.has(f);
 
 /** Route → module, for hiding navigation entries and gating their URLs. */

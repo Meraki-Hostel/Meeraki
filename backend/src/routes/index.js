@@ -6,6 +6,7 @@ import studentRoutes from "../modules/students/student.routes.js";
 import paymentRoutes from "../modules/payments/payment.routes.js";
 import complaintRoutes from "../modules/complaints/complaint.routes.js";
 import leaveRoutes from "../modules/leave/leave.routes.js";
+import visitorRoutes from "../modules/visitors/visitor.routes.js";
 import miscRoutes from "../modules/misc/misc.routes.js";
 
 const router = Router();
@@ -14,6 +15,7 @@ router.use("/properties", propertyRoutes);
 router.use("/students", studentRoutes);
 router.use("/complaints", complaintRoutes);
 router.use("/leave", leaveRoutes);
+router.use("/visitors", visitorRoutes);
 // Rooms, beds, charges, payments and misc declare their own full sub-paths.
 router.use("/", roomRoutes);
 router.use("/", paymentRoutes);

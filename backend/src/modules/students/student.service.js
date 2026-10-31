@@ -83,8 +83,9 @@ async function detail(auth, id) {
     .map((p) => ({ ...p, paidOn: iso(p.paidOn) }))
     .sort((a, b) => b.paidOn.localeCompare(a.paidOn));
 
-  // Documents, complaints, leave and visitors have no backend module yet. They are
-  // omitted (not returned as []) so a screen can show "not available" instead of "none".
+  // Per-resident leave, visitor and document lists are not wired into this view yet
+  // (documents have no backend module). They are omitted (not returned as []) so a
+  // screen can show "not available" instead of "none".
   return { student: toListItem(s, maps), charges, payments };
 }
 

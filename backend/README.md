@@ -23,7 +23,8 @@ plus the spine they depend on:
 | Complaints | `IComplaintService` | ✅ list, get, create (resident), update/triage + assign (staff), comments with staff-only internal notes |
 | Notifications/Activity | `INotification/IActivityService` | ✅ read + mark-read (created by payment and complaint flows) |
 | Leave | `ILeaveService` | ✅ list, create (resident: date, overlap and 30-day checks), decide (staff), cancel (resident); pending-only, row-locked |
-| Visitors, maintenance, inventory, announcements, events, feedback, documents, analytics, settings, search | their interfaces | ⬜ not yet — each follows the identical recipe (see below). The frontend hides these and shows "Not available yet". |
+| Visitors | `IVisitorService` | ✅ list, create (resident: date, 30-day and visiting-hours checks), walk-in (staff, checked in at once), decide, check-in (on the visit date) / check-out, cancel (resident); row-locked transitions |
+| Maintenance, inventory, announcements, events, feedback, documents, analytics, settings, search | their interfaces | ⬜ not yet — each follows the identical recipe (see below). The frontend hides these and shows "Not available yet". |
 
 ## The error contract (this is the clever part)
 
@@ -130,7 +131,7 @@ accounts there.
 
 ## Adding the remaining modules (the recipe)
 
-For each (e.g. visitors): add the Prisma model(s) → `*.validation.js` (Zod) →
+For each (e.g. maintenance): add the Prisma model(s) → `*.validation.js` (Zod) →
 `*.service.js` (logic + `scope.js` tenant checks + `$transaction` for multi-step
 writes + `utils/effects.js` for activity, notifications and counters) →
 `*.controller.js` → `*.routes.js` → mount in `routes/index.js` → add an HTTP

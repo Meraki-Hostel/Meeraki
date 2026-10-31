@@ -32,8 +32,8 @@ Sign in with `owner@demo.com`, `manager@demo.com` or `student@demo.com` (passwor
 
 ## What's on the real API so far
 
-Auth, properties, rooms/beds, students, payments, complaints, leave,
-notifications and activity. Visitors, maintenance, inventory, staff, announcements,
+Auth, properties, rooms/beds, students, payments, complaints, leave, visitors,
+notifications and activity. Maintenance, inventory, staff, announcements,
 events, feedback, documents, analytics trends, settings and search have no
 backend yet: the app hides them and shows "Not available yet" until their
 modules are built. See `backend/README.md` → "Adding the remaining modules".

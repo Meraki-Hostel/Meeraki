@@ -1,6 +1,6 @@
 import type {
   IAnnouncementService, IDocumentService, IEventService, IFeedbackService, IInventoryService,
-  IMaintenanceService, ISearchService, ISettingsService, IStaffService, IVisitorService, Services,
+  IMaintenanceService, ISearchService, ISettingsService, IStaffService, Services,
 } from './interfaces';
 import { httpAuthService, httpPaymentService } from './http/auth-and-payments';
 import { httpPropertyService, httpRoomService, httpStudentService } from './http/spine';
@@ -8,6 +8,7 @@ import { httpActivityService, httpNotificationService } from './http/misc';
 import { httpAnalyticsService } from './http/analytics';
 import { httpComplaintService } from './http/complaints';
 import { httpLeaveService } from './http/leave';
+import { httpVisitorService } from './http/visitors';
 import { unavailable } from './unavailable';
 
 /**
@@ -34,7 +35,7 @@ export const services: Services = {
   leave: httpLeaveService,
 
   // No backend yet:
-  visitors: unavailable<IVisitorService>('Visitors'),
+  visitors: httpVisitorService,
   maintenance: unavailable<IMaintenanceService>('Maintenance'),
   inventory: unavailable<IInventoryService>('Inventory'),
   announcements: unavailable<IAnnouncementService>('Notices'),
