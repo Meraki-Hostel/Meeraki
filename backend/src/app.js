@@ -3,6 +3,7 @@ import helmet from "helmet";
 import cors from "cors";
 import morgan from "morgan";
 import { env, isProd } from "./config/env.js";
+import { prisma } from "./config/prisma.js";
 import { requestId } from "./middleware/requestId.js";
 import { globalLimiter } from "./middleware/rateLimit.js";
 import { notFound, errorHandler } from "./middleware/errorHandler.js";
@@ -36,6 +37,15 @@ export function createApp() {
   app.use(express.json({ limit: "1mb" }));
 
   app.get("/health", (_req, res) => res.json({ status: "ok", uptime: process.uptime() }));
+  // Readiness: the database answers. Load balancers route traffic only when ready.
+  app.get("/ready", async (_req, res) => {
+    try {
+      await prisma.$queryRaw`SELECT 1`;
+      res.json({ status: "ready" });
+    } catch {
+      res.status(503).json({ status: "database unavailable" });
+    }
+  });
   app.use("/api/v1", apiRoutes);
   app.use(notFound);
   app.use(errorHandler);

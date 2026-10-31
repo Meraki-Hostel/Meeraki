@@ -92,9 +92,12 @@ describe("modules that do not exist yet are omitted, not faked as empty", () => 
     }
   });
 
-  test("[FAKE-EMPTY] property stats do not report openComplaints: 0 while complaints are unimplemented", async () => {
-    const res = await (await as(w.users.owner)).get(`/properties/${w.A.id}`);
-    assert.equal("openComplaints" in res.body.data.stats, false, "stats.openComplaints is a hard-coded 0");
+  test("property stats count real open complaints", async () => {
+    const owner = await as(w.users.owner);
+    assert.equal((await owner.get(`/properties/${w.A.id}`)).body.data.stats.openComplaints, 0);
+    await prisma.complaint.create({ data: { ticketNo: "CMP-T1", propertyId: w.A.id, studentId: w.residentA.id, category: "plumbing", title: "Leak", description: "d", priority: "medium" } });
+    await prisma.complaint.create({ data: { ticketNo: "CMP-T2", propertyId: w.A.id, studentId: w.residentA.id, category: "plumbing", title: "Done", description: "d", priority: "low", status: "closed" } });
+    assert.equal((await owner.get(`/properties/${w.A.id}`)).body.data.stats.openComplaints, 1);
   });
 });
 

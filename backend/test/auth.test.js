@@ -111,31 +111,20 @@ describe("auth: access follows the database, not the token", () => {
   });
 });
 
-describe("auth: flows that are not built answer honestly instead of claiming success", () => {
-  test("[DEF-B4] reset-password does not report success while it changes nothing", async () => {
+// Full reset / invitation / session flows are covered in accounts.test.js.
+describe("auth: link flows refuse unknown tokens without changing anything", () => {
+  test("reset-password with an unknown token is EXPIRED and changes nothing", async () => {
+    const before = (await prisma.user.findUnique({ where: { id: w.users.studentA.id } })).passwordHash;
     const res = await rawRequest().post("/api/v1/auth/reset-password").send({ token: "any-token", password: "NewPassw0rd!" });
-    assert.equal(res.status, 501, `reset-password answered ${res.status}`);
-    assert.equal(res.body.error.code, "NOT_IMPLEMENTED");
+    assert.equal(res.status, 410);
+    assert.equal(res.body.error.code, "EXPIRED");
+    assert.equal((await prisma.user.findUnique({ where: { id: w.users.studentA.id } })).passwordHash, before);
   });
 
-  test("[DEF-B4] accepting an invitation does not report success without creating an account", async () => {
-    await prisma.invitation.create({
-      data: { orgId: w.org.id, token: "inv-test-1", name: "New Warden", email: "warden@example.test", role: "manager",
-        propertyId: w.A.id, invitedBy: "test", expiresAt: new Date(Date.now() + 864e5) },
-    });
-    const res = await rawRequest().post("/api/v1/auth/invitations/accept").send({ token: "inv-test-1", password: "NewPassw0rd!" });
-    assert.equal(res.status, 501, `accept answered ${res.status}`);
-    assert.equal(res.body.error.code, "NOT_IMPLEMENTED");
+  test("accepting an unknown invitation creates no account", async () => {
+    const res = await rawRequest().post("/api/v1/auth/invitations/accept").send({ token: "no-such-invitation", password: "NewPassw0rd!" });
+    assert.equal(res.status, 404);
     assert.equal(await prisma.user.count({ where: { email: "warden@example.test" } }), 0);
-    const inv = await prisma.invitation.findUnique({ where: { token: "inv-test-1" } });
-    assert.equal(inv.status, "pending", "the invitation was consumed although no account was created");
-  });
-
-  test("[DEF-B4] forgot-password does not claim a message was sent when no provider exists", async () => {
-    const res = await rawRequest().post("/api/v1/auth/forgot-password").send({ identifier: w.users.studentA.email });
-    assert.equal(res.status, 503, `forgot-password answered ${res.status}`);
-    assert.equal(res.body.error.code, "NOT_CONFIGURED");
-    assert.equal(res.body.data, null, "no 'we sent a link to …' payload");
   });
 });
 
@@ -156,9 +145,9 @@ describe("auth: the token proves identity; the database decides scope", () => {
     assert.equal((await api(token).get("/properties")).status, 401);
   });
 
-  test("access tokens carry only identity and role, not scope", async () => {
+  test("access tokens carry only identity, role and token version, not scope", async () => {
     const token = (await login(w.users.owner)).body.data.accessToken;
-    assert.deepEqual(Object.keys(jwt.decode(token)).sort(), ["exp", "iat", "role", "sub"]);
+    assert.deepEqual(Object.keys(jwt.decode(token)).sort(), ["exp", "iat", "role", "sub", "tv"]);
   });
 
   test("an unknown account and a wrong password are indistinguishable", async () => {

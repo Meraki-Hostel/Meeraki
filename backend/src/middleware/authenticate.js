@@ -20,11 +20,14 @@ export const authenticate = asyncHandler(async (req, _res, next) => {
 
   const user = await prisma.user.findUnique({
     where: { id: payload.sub },
-    select: { id: true, role: true, orgId: true, propertyId: true, studentId: true },
+    select: { id: true, role: true, orgId: true, propertyId: true, studentId: true, staffId: true, tokenVersion: true, disabledAt: true },
   });
   if (!user) throw unauthenticated();
+  if (user.disabledAt) throw unauthenticated("This account has been deactivated. Contact your hostel admin.");
   // Role changed since this token was issued: make them sign in again.
   if (user.role !== payload.role) throw unauthenticated("Your access has changed. Sign in again.");
+  // Password changed or "sign out everywhere" since this token was issued.
+  if ((payload.tv ?? 0) !== user.tokenVersion) throw unauthenticated();
 
   req.auth = {
     userId: user.id,
@@ -32,6 +35,7 @@ export const authenticate = asyncHandler(async (req, _res, next) => {
     orgId: user.orgId,
     propertyId: user.propertyId || undefined,
     studentId: user.studentId || undefined,
+    staffId: user.staffId || undefined,
   };
   next();
 });

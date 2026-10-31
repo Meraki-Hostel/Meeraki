@@ -1,6 +1,9 @@
 import { prisma } from "../../config/prisma.js";
-import { notFound, forbidden, conflict, invalid } from "../../utils/ApiError.js";
+import { notFound, conflict, invalid } from "../../utils/ApiError.js";
 import { assertPropertyAccess, propertyScope, requireRole } from "../../utils/scope.js";
+import { currentPeriod } from "../../utils/money.js";
+import { assertWithinPlan } from "../settings/settings.service.js";
+import { generateRent } from "../payments/charge.service.js";
 
 export async function list(auth, filters = {}) {
   const where = await propertyScope(auth, filters.propertyId);
@@ -44,6 +47,7 @@ export async function create(auth, input) {
   await assertPropertyAccess(auth, propertyId);
   // Room and its beds are one unit: either both exist or neither does.
   return prisma.$transaction(async (tx) => {
+    await assertWithinPlan(tx, auth.orgId, { beds: BEDS_PER_TYPE[input.type] });
     const room = await tx.room.create({
       data: {
         propertyId, number: input.number, floor: input.floor, type: input.type, rent: input.rent,
@@ -79,6 +83,7 @@ export async function update(auth, id, input) {
       }
       const missing = LABELS.slice(beds.length, target);
       if (missing.length) {
+        await assertWithinPlan(tx, auth.orgId, { beds: missing.length });
         await tx.bed.createMany({ data: missing.map((label) => ({ roomId: id, propertyId: room.propertyId, label })) });
       }
     }
@@ -102,7 +107,7 @@ export async function setBedStatus(auth, bedId, status, reason) {
 
 export async function assignBed(auth, studentId, bedId) {
   requireRole(auth, "owner", "manager");
-  await prisma.$transaction(async (tx) => {
+  const activated = await prisma.$transaction(async (tx) => {
     const student = await tx.studentProfile.findUnique({ where: { id: studentId } });
     if (!student) throw notFound("Student");
     await assertPropertyAccess(auth, student.propertyId);
@@ -112,7 +117,7 @@ export async function assignBed(auth, studentId, bedId) {
     await assertPropertyAccess(auth, bed.propertyId);
     if (bed.propertyId !== student.propertyId) throw conflict("Bed and student belong to different properties.");
     if (student.status === "moved_out") throw conflict("This resident has moved out. Change their status before assigning a bed.");
-    if (student.bedId === bedId) return;
+    if (student.bedId === bedId) return null;
 
     // Free the student's current bed if they have one (move/transfer).
     if (student.bedId) {
@@ -128,7 +133,10 @@ export async function assignBed(auth, studentId, bedId) {
       where: { id: studentId },
       data: { bedId, roomId: bed.roomId, status: student.status === "pending" ? "active" : student.status },
     });
+    return student.status === "pending" ? student.propertyId : null;
   });
+  // A waitlisted resident who just got a bed starts paying this month (pro-rated).
+  if (activated) await generateRent({ period: currentPeriod(), orgId: auth.orgId, propertyId: activated });
 }
 
 export async function vacateBed(auth, studentId) {
