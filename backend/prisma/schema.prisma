@@ -111,6 +111,165 @@ enum InvitationStatus {
   expired
 }
 
+// rent      = the monthly bill, one per student per period
+// deposit   = refundable security deposit, at most one per student
+// late_fee  = flat fee after the grace period, one per student per period
+// other     = one-off charge raised by staff (damage, key replacement, ...)
+enum ChargeKind {
+  rent
+  deposit
+  late_fee
+  other
+}
+
+// pending = gateway accepted the refund but has not settled it; processed = done;
+// failed = gateway refused it (never counted).
+enum RefundStatus {
+  pending
+  processed
+  failed
+}
+
+enum RefundMethod {
+  gateway
+  manual
+}
+
+enum Priority {
+  low
+  medium
+  high
+  urgent
+}
+
+enum ComplaintStatus {
+  open
+  in_progress
+  resolved
+  closed
+}
+
+enum ComplaintCategory {
+  electrical
+  plumbing
+  cleaning
+  internet
+  food
+  furniture
+  security
+  other
+}
+
+enum LeaveStatus {
+  pending
+  approved
+  rejected
+  cancelled
+}
+
+enum VisitorStatus {
+  pending
+  approved
+  rejected
+  checked_in
+  checked_out
+  cancelled
+}
+
+enum VisitorSource {
+  request
+  walk_in
+}
+
+enum MaintenanceStatus {
+  open
+  assigned
+  in_progress
+  on_hold
+  completed
+}
+
+enum MaintenanceCategory {
+  electrical
+  plumbing
+  carpentry
+  painting
+  appliance
+  civil
+  pest_control
+}
+
+enum InventoryCategory {
+  linen
+  furniture
+  kitchen
+  cleaning
+  electrical
+  stationery
+  safety
+}
+
+enum AnnouncementStatus {
+  draft
+  published
+  archived
+}
+
+enum AnnouncementCategory {
+  general
+  maintenance
+  mess
+  event
+  urgent
+}
+
+enum EventStatus {
+  scheduled
+  completed
+  cancelled
+}
+
+enum EventCategory {
+  cultural
+  sports
+  workshop
+  festival
+  meeting
+  health
+}
+
+enum FeedbackCategory {
+  food
+  cleanliness
+  staff
+  facilities
+  security
+  internet
+  other
+}
+
+enum DocumentType {
+  id_proof
+  admission_letter
+  photo
+  police_verification
+  rent_agreement
+  medical
+}
+
+enum DocumentStatus {
+  missing
+  uploaded
+  verified
+  rejected
+}
+
+enum EmergencyStatus {
+  open
+  acknowledged
+  resolved
+}
+
 // ── Tenancy ──────────────────────────────────────────────────────────────────
 // One operating business. Owners see every property of THEIR organization only;
 // managers and students are tied to one property inside it. The composite
@@ -119,6 +278,10 @@ enum InvitationStatus {
 model Organization {
   id        String   @id @default(uuid())
   name      String
+  // Subscription tier (catalogue in src/modules/settings/plans.js) and the owner's
+  // settings; missing keys fall back to the defaults in settings.service.js.
+  planId    String   @default("starter")
+  settings  Json     @default("{}")
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
@@ -131,26 +294,32 @@ model Organization {
 
 // ── Identity ─────────────────────────────────────────────────────────────────
 model User {
-  id          String  @id @default(uuid())
-  name        String
-  email       String  @unique
-  phone       String
-  role        Role
-  orgId       String
-  title       String  @default("")
+  id           String    @id @default(uuid())
+  name         String
+  email        String    @unique
+  phone        String
+  role         Role
+  orgId        String
+  title        String    @default("")
   passwordHash String
   // Links mirrored from domain.ts User
-  propertyId  String?
-  studentId   String? @unique
-  staffId     String?
-  preferences Json    @default("{\"emailDigest\":true,\"smsAlerts\":false,\"compactTables\":false}")
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  propertyId   String?
+  studentId    String?   @unique
+  staffId      String?
+  preferences  Json      @default("{\"emailDigest\":true,\"smsAlerts\":false,\"compactTables\":false}")
+  // Carried in the access token; bumping it (password change, sign out everywhere)
+  // invalidates every access token already issued.
+  tokenVersion Int       @default(0)
+  // Set when the linked staff member is deactivated: sign-in and every request refused.
+  disabledAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
 
   refreshTokens RefreshToken[]
-  student       StudentProfile? @relation(fields: [studentId], references: [id])
-  org           Organization    @relation(fields: [orgId], references: [id])
-  property      Property?       @relation(fields: [propertyId, orgId], references: [id, orgId], onDelete: NoAction, onUpdate: NoAction)
+  resetTokens   PasswordResetToken[]
+  student       StudentProfile?      @relation(fields: [studentId], references: [id])
+  org           Organization         @relation(fields: [orgId], references: [id])
+  property      Property?            @relation(fields: [propertyId, orgId], references: [id, orgId], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([role])
   @@index([propertyId])
@@ -160,6 +329,9 @@ model User {
 model RefreshToken {
   id        String    @id @default(uuid())
   userId    String
+  // Every token minted by rotating another shares its family. Presenting a token
+  // that was already rotated away means it leaked: the whole family is revoked.
+  familyId  String
   tokenHash String    @unique
   expiresAt DateTime
   revokedAt DateTime?
@@ -167,57 +339,89 @@ model RefreshToken {
   user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
+  @@index([familyId])
 }
 
-model Invitation {
-  token     String           @id
-  name      String
-  email     String
-  role      String // Role | 'staff'
-  orgId     String
-  propertyId String?
-  invitedBy String
-  status    InvitationStatus @default(pending)
+model PasswordResetToken {
+  id        String    @id @default(uuid())
+  userId    String
+  tokenHash String    @unique
   expiresAt DateTime
-  createdAt DateTime         @default(now())
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// Only the SHA-256 of the token is stored; the raw token exists in the link that was sent.
+model Invitation {
+  id         String           @id @default(uuid())
+  tokenHash  String           @unique
+  name       String
+  email      String
+  role       String // Role | 'staff'
+  orgId      String
+  propertyId String?
+  studentId  String?
+  staffId    String?
+  invitedBy  String
+  status     InvitationStatus @default(pending)
+  expiresAt  DateTime
+  acceptedAt DateTime?
+  createdAt  DateTime         @default(now())
 
   org      Organization @relation(fields: [orgId], references: [id])
   property Property?    @relation(fields: [propertyId, orgId], references: [id, orgId], onDelete: NoAction, onUpdate: NoAction)
 
   @@index([orgId])
+  @@index([studentId])
+  @@index([staffId])
 }
 
 // ── Property / rooms / beds ──────────────────────────────────────────────────
 model Property {
-  id            String         @id @default(uuid())
-  orgId         String
-  name          String
-  code          String         @unique
-  type          PropertyType
-  status        PropertyStatus @default(active)
-  city          String
-  locality      String
-  address       String
-  pincode       String
-  phone         String
+  id             String         @id @default(uuid())
+  orgId          String
+  name           String
+  code           String         @unique
+  type           PropertyType
+  status         PropertyStatus @default(active)
+  city           String
+  locality       String
+  address        String
+  pincode        String
+  phone          String
   managerStaffId String?
-  baseRent      Int
-  amenities     String[]
-  openedOn      DateTime
-  imageVariant  Int            @default(0)
-  createdAt     DateTime       @default(now())
-  updatedAt     DateTime       @updatedAt
+  baseRent       Int
+  amenities      String[]
+  openedOn       DateTime
+  imageVariant   Int            @default(0)
+  createdAt      DateTime       @default(now())
+  updatedAt      DateTime       @updatedAt
 
-  rooms    Room[]
-  beds     Bed[]
-  students StudentProfile[]
-  charges  RentCharge[]
-  payments Payment[]
-  org         Organization  @relation(fields: [orgId], references: [id])
-  users       User[]
-  staff       StaffMember[]
-  invitations Invitation[]
-  activity    ActivityLog[]
+  rooms         Room[]
+  beds          Bed[]
+  students      StudentProfile[]
+  charges       RentCharge[]
+  payments      Payment[]
+  org           Organization        @relation(fields: [orgId], references: [id])
+  users         User[]
+  staff         StaffMember[]
+  invitations   Invitation[]
+  activity      ActivityLog[]
+  refunds       Refund[]
+  complaints    Complaint[]
+  leaves        LeaveRequest[]
+  visitors      VisitorRequest[]
+  maintenance   MaintenanceTicket[]
+  inventory     InventoryItem[]
+  announcements Announcement[]
+  events        HostelEvent[]
+  feedback      Feedback[]
+  documents     DocumentRecord[]
+  emergencies   EmergencyAlert[]
+  snapshots     MonthlySnapshot[]
 
   @@unique([id, orgId]) // target of the same-org composite relations
   @@index([status])
@@ -266,40 +470,47 @@ model Bed {
 
 // ── People ───────────────────────────────────────────────────────────────────
 model StudentProfile {
-  id              String        @id @default(uuid())
-  studentCode     String        @unique
-  name            String
-  email           String
-  phone           String
-  gender          Gender
-  dob             DateTime
-  college         String
-  course          String
-  year            Int
-  propertyId      String
-  roomId          String?
-  bedId           String?       @unique
-  status          StudentStatus @default(pending)
-  joinedOn        DateTime
-  monthlyRent     Int
-  address         String        @default("")
-  bloodGroup      String        @default("")
-  guardianName    String        @default("")
-  guardianRelation String       @default("")
-  guardianPhone   String        @default("")
-  emergencyName   String        @default("")
-  emergencyPhone  String        @default("")
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  id               String        @id @default(uuid())
+  studentCode      String        @unique
+  name             String
+  email            String
+  phone            String
+  gender           Gender
+  dob              DateTime
+  college          String
+  course           String
+  year             Int
+  propertyId       String
+  roomId           String?
+  bedId            String?       @unique
+  status           StudentStatus @default(pending)
+  joinedOn         DateTime
+  monthlyRent      Int
+  address          String        @default("")
+  bloodGroup       String        @default("")
+  guardianName     String        @default("")
+  guardianRelation String        @default("")
+  guardianPhone    String        @default("")
+  emergencyName    String        @default("")
+  emergencyPhone   String        @default("")
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
 
-  property   Property   @relation(fields: [propertyId], references: [id])
-  room       Room?      @relation(fields: [roomId], references: [id])
-  bedRef     Bed?       @relation("StudentBed")
-  user       User?
-  charges    RentCharge[]
-  payments   Payment[]
+  property    Property         @relation(fields: [propertyId], references: [id])
+  room        Room?            @relation(fields: [roomId], references: [id])
+  bedRef      Bed?             @relation("StudentBed")
+  user        User?
+  charges     RentCharge[]
+  payments    Payment[]
+  complaints  Complaint[]
+  leaves      LeaveRequest[]
+  visitors    VisitorRequest[]
+  feedback    Feedback[]
+  documents   DocumentRecord[]
+  emergencies EmergencyAlert[]
 
   @@index([propertyId, status])
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, map: "StudentProfile_name_trgm")
 }
 
 model StaffMember {
@@ -321,54 +532,96 @@ model StaffMember {
 
   @@index([propertyId])
   @@index([orgId])
+  @@index([name(ops: raw("gin_trgm_ops"))], type: Gin, map: "StaffMember_name_trgm")
 }
 
 // ── Money ────────────────────────────────────────────────────────────────────
 model RentCharge {
-  id          String   @id @default(uuid())
+  id          String     @id @default(uuid())
   studentId   String
   propertyId  String
+  kind        ChargeKind @default(rent)
   period      String // YYYY-MM
   amount      Int
   dueDate     DateTime
-  description String   @default("")
-  createdAt   DateTime @default(now())
+  description String     @default("")
+  createdBy   String     @default("system")
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @default(now()) @updatedAt
 
   student  StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
   property Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   payments Payment[]
+  refunds  Refund[]
+  // Also in SQL only (Prisma cannot express partial indexes):
+  //   "RentCharge_one_per_period" UNIQUE (studentId, period, kind) WHERE kind IN ('rent','late_fee')
+  //   "RentCharge_one_deposit"   UNIQUE (studentId)               WHERE kind = 'deposit'
+  //   CHECK (amount >= 0)
 
-  @@unique([studentId, period])
+  @@index([studentId, period])
   @@index([propertyId, period])
 }
 
 model Payment {
-  id         String        @id @default(uuid())
-  chargeId   String
-  studentId  String
-  propertyId String
-  amount     Int
-  method     PaymentMethod
-  paidOn     DateTime
-  reference  String
-  receiptNo  String        @unique
-  status     PaymentStatus
-  recordedBy String
-  note       String?
+  id               String        @id @default(uuid())
+  chargeId         String
+  studentId        String
+  propertyId       String
+  amount           Int
+  method           PaymentMethod
+  paidOn           DateTime
+  reference        String
+  receiptNo        String        @unique
+  status           PaymentStatus
+  recordedBy       String
+  note             String?
   // Set for online (gateway) payments; lets webhooks reconcile idempotently.
-  gatewayOrderId   String? @unique
+  gatewayOrderId   String?       @unique
   gatewayPaymentId String?
-  createdAt  DateTime      @default(now())
+  createdAt        DateTime      @default(now())
 
   charge   RentCharge     @relation(fields: [chargeId], references: [id], onDelete: Cascade)
   student  StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
   property Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  refunds  Refund[]
+  // Also in SQL only (Prisma cannot express it): unique partial index
+  // "Payment_one_pending_per_charge" on (chargeId) WHERE status = 'pending'.
 
   @@index([propertyId, paidOn])
   @@index([studentId])
   @@index([chargeId, status])
-  // Also in SQL only (Prisma cannot express it): unique partial index
-  // "Payment_one_pending_per_charge" on (chargeId) WHERE status = 'pending'.
+}
+
+// Money returned against a payment. Pending and processed refunds reduce what was
+// paid on the charge (see utils/ledger.js); failed ones never do.
+// adjustCharge = the charge itself is reduced by the same amount (deposit returned,
+// goodwill) so the due stays settled; otherwise the charge is owed again (or an
+// overpayment is corrected).
+model Refund {
+  id              String       @id @default(uuid())
+  refundNo        String       @unique
+  paymentId       String
+  chargeId        String
+  studentId       String
+  propertyId      String
+  amount          Int
+  reason          String
+  method          RefundMethod
+  status          RefundStatus @default(pending)
+  adjustCharge    Boolean      @default(false)
+  gatewayRefundId String?      @unique
+  createdBy       String
+  createdAt       DateTime     @default(now())
+  updatedAt       DateTime     @updatedAt
+
+  payment  Payment    @relation(fields: [paymentId], references: [id], onDelete: Cascade)
+  charge   RentCharge @relation(fields: [chargeId], references: [id], onDelete: Cascade)
+  property Property   @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  // CHECK (amount > 0) in SQL.
+
+  @@index([chargeId, status])
+  @@index([paymentId])
+  @@index([propertyId, createdAt])
 }
 
 // Named counters (e.g. receipt sequence) incremented inside transactions.
@@ -408,4 +661,346 @@ model ActivityLog {
   @@index([propertyId])
   @@index([createdAt])
   @@index([orgId])
+}
+
+// ── Resident operations ──────────────────────────────────────────────────────
+model Complaint {
+  id              String            @id @default(uuid())
+  ticketNo        String            @unique
+  propertyId      String
+  studentId       String
+  roomId          String?
+  category        ComplaintCategory
+  title           String
+  description     String
+  priority        Priority
+  status          ComplaintStatus   @default(open)
+  assigneeStaffId String?
+  createdAt       DateTime          @default(now())
+  updatedAt       DateTime          @updatedAt
+
+  property    Property           @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  student     StudentProfile     @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  comments    ComplaintComment[]
+  history     ComplaintHistory[]
+  attachments Upload[]
+
+  @@index([propertyId, status])
+  @@index([studentId])
+  @@index([title(ops: raw("gin_trgm_ops"))], type: Gin, map: "Complaint_title_trgm")
+}
+
+model ComplaintComment {
+  id           String   @id @default(uuid())
+  complaintId  String
+  authorUserId String
+  authorName   String
+  authorRole   Role
+  body         String
+  // Staff-only note: never returned to the student.
+  internal     Boolean  @default(false)
+  createdAt    DateTime @default(now())
+
+  complaint Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+
+  @@index([complaintId])
+}
+
+model ComplaintHistory {
+  id          String          @id @default(uuid())
+  complaintId String
+  status      ComplaintStatus
+  changedBy   String
+  note        String?
+  at          DateTime        @default(now())
+
+  complaint Complaint @relation(fields: [complaintId], references: [id], onDelete: Cascade)
+
+  @@index([complaintId])
+}
+
+model LeaveRequest {
+  id             String      @id @default(uuid())
+  studentId      String
+  propertyId     String
+  fromDate       DateTime    @db.Date
+  toDate         DateTime    @db.Date
+  destination    String
+  contactPhone   String
+  reason         String
+  status         LeaveStatus @default(pending)
+  decisionReason String?
+  decidedBy      String?
+  decidedAt      DateTime?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  student  StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  property Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  // CHECK ("toDate" >= "fromDate") in SQL.
+
+  @@index([propertyId, status])
+  @@index([studentId, status])
+}
+
+model VisitorRequest {
+  id             String        @id @default(uuid())
+  studentId      String
+  propertyId     String
+  source         VisitorSource @default(request)
+  visitorName    String
+  visitorPhone   String
+  relation       String
+  visitDate      DateTime      @db.Date
+  visitTime      String
+  purpose        String
+  status         VisitorStatus @default(pending)
+  decisionReason String?
+  decidedBy      String?
+  checkInAt      DateTime?
+  checkOutAt     DateTime?
+  createdBy      String
+  createdAt      DateTime      @default(now())
+  updatedAt      DateTime      @updatedAt
+
+  student  StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  property Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, visitDate])
+  @@index([propertyId, status])
+  @@index([studentId])
+}
+
+// Anonymous feedback keeps studentId (for "my feedback" and rate limiting) but it
+// is never returned to staff.
+model Feedback {
+  id         String           @id @default(uuid())
+  propertyId String
+  studentId  String
+  category   FeedbackCategory
+  rating     Int
+  comment    String
+  anonymous  Boolean          @default(false)
+  createdAt  DateTime         @default(now())
+
+  property Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  student  StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  // CHECK (rating BETWEEN 1 AND 5) in SQL.
+
+  @@index([propertyId, createdAt])
+  @@index([studentId, category, createdAt])
+}
+
+model EmergencyAlert {
+  id             String          @id @default(uuid())
+  propertyId     String
+  studentId      String
+  type           String
+  message        String
+  location       String
+  status         EmergencyStatus @default(open)
+  acknowledgedBy String?
+  acknowledgedAt DateTime?
+  resolvedBy     String?
+  resolvedAt     DateTime?
+  resolutionNote String?
+  createdAt      DateTime        @default(now())
+
+  property Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  student  StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, status])
+}
+
+// ── Property operations ──────────────────────────────────────────────────────
+model MaintenanceTicket {
+  id              String              @id @default(uuid())
+  ticketNo        String              @unique
+  propertyId      String
+  title           String
+  description     String
+  category        MaintenanceCategory
+  location        String
+  priority        Priority
+  status          MaintenanceStatus   @default(open)
+  assigneeStaffId String?
+  vendor          String?
+  estimatedCost   Int                 @default(0)
+  actualCost      Int?
+  createdBy       String
+  createdAt       DateTime            @default(now())
+  updatedAt       DateTime            @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, status])
+}
+
+model InventoryItem {
+  id           String            @id @default(uuid())
+  propertyId   String
+  name         String
+  sku          String
+  category     InventoryCategory
+  unit         String
+  quantity     Int
+  reorderLevel Int
+  unitCost     Int
+  createdAt    DateTime          @default(now())
+  updatedAt    DateTime          @updatedAt
+
+  property     Property               @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  transactions InventoryTransaction[]
+  // CHECK (quantity >= 0 AND "reorderLevel" >= 0 AND "unitCost" >= 0) in SQL.
+
+  @@unique([propertyId, sku])
+  @@index([propertyId, category])
+}
+
+model InventoryTransaction {
+  id         String   @id @default(uuid())
+  itemId     String
+  propertyId String
+  type       String // 'in' | 'out' (CHECK in SQL; "in" cannot be a Prisma enum value)
+  quantity   Int
+  note       String   @default("")
+  by         String
+  at         DateTime @default(now())
+
+  item InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  @@index([itemId, at])
+  @@index([propertyId, at])
+}
+
+model Announcement {
+  id             String               @id @default(uuid())
+  propertyId     String
+  title          String
+  body           String
+  category       AnnouncementCategory
+  audienceType   String               @default("all") // 'all' | 'floors' | 'rooms'
+  audienceValues String[]             @default([])
+  status         AnnouncementStatus   @default(draft)
+  author         String
+  publishedAt    DateTime?
+  createdAt      DateTime             @default(now())
+  updatedAt      DateTime             @updatedAt
+
+  property Property           @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  reads    AnnouncementRead[]
+
+  @@index([propertyId, status])
+  @@index([title(ops: raw("gin_trgm_ops"))], type: Gin, map: "Announcement_title_trgm")
+}
+
+model AnnouncementRead {
+  announcementId String
+  studentId      String
+  readAt         DateTime @default(now())
+
+  announcement Announcement @relation(fields: [announcementId], references: [id], onDelete: Cascade)
+
+  @@id([announcementId, studentId])
+  @@index([studentId])
+}
+
+model HostelEvent {
+  id                 String        @id @default(uuid())
+  propertyId         String
+  title              String
+  description        String
+  category           EventCategory
+  date               DateTime      @db.Date
+  startTime          String
+  endTime            String
+  location           String
+  capacity           Int
+  expectedAttendance Int           @default(0)
+  status             EventStatus   @default(scheduled)
+  createdBy          String
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@index([propertyId, date])
+}
+
+// ── Documents and file storage ───────────────────────────────────────────────
+model DocumentRecord {
+  id         String         @id @default(uuid())
+  studentId  String
+  propertyId String
+  type       DocumentType
+  status     DocumentStatus @default(missing)
+  uploadId   String?        @unique
+  note       String?
+  reviewedBy String?
+  reviewedAt DateTime?
+  createdAt  DateTime       @default(now())
+  updatedAt  DateTime       @updatedAt
+
+  student  StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
+  property Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+  upload   Upload?        @relation(fields: [uploadId], references: [id], onDelete: SetNull)
+
+  @@unique([studentId, type])
+  @@index([propertyId, status])
+}
+
+// One file in object storage (Cloudflare R2, or the local folder in development).
+// Created when an upload URL is issued; confirmedAt is set only after the server
+// has checked the stored object matches what was signed. Unconfirmed rows older
+// than a day are deleted (object and row) by the cleanup job.
+model Upload {
+  id          String    @id @default(uuid())
+  key         String    @unique
+  purpose     String // 'document' | 'complaint'
+  orgId       String
+  propertyId  String
+  ownerUserId String
+  fileName    String
+  contentType String
+  sizeBytes   Int
+  confirmedAt DateTime?
+  complaintId String?
+  createdAt   DateTime  @default(now())
+
+  complaint Complaint?      @relation(fields: [complaintId], references: [id], onDelete: SetNull)
+  document  DocumentRecord?
+
+  @@index([ownerUserId])
+  @@index([confirmedAt, createdAt])
+  @@index([complaintId])
+}
+
+// ── Analytics history and jobs ───────────────────────────────────────────────
+model MonthlySnapshot {
+  propertyId   String
+  period       String // YYYY-MM
+  beds         Int
+  occupiedBeds Int
+  occupancyPct Int
+  expected     Int
+  collected    Int
+  arrears      Int
+  complaints   Int
+  createdAt    DateTime @default(now())
+
+  property Property @relation(fields: [propertyId], references: [id], onDelete: Cascade)
+
+  @@id([propertyId, period])
+}
+
+model JobRun {
+  id         String    @id @default(uuid())
+  name       String
+  startedAt  DateTime  @default(now())
+  finishedAt DateTime?
+  ok         Boolean?
+  result     Json?
+  error      String?
+
+  @@index([name, startedAt])
 }
