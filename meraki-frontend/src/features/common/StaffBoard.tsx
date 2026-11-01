@@ -8,6 +8,7 @@ import { useMutation } from '@/hooks/useMutation';
 import { useDebounced } from '@/hooks/misc';
 import { useConfirm } from '@/app/providers/ConfirmProvider';
 import { useCurrentUser } from '@/app/providers/SessionProvider';
+import { useToast } from '@/app/providers/ToastProvider';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, DescriptionList } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -23,23 +24,39 @@ import { formatDate, formatPhone, sentenceCase } from '@/lib/format';
 const ROLES: StaffRole[] = ['manager', 'warden', 'accountant', 'housekeeping', 'security', 'cook', 'maintenance'];
 const SHIFTS: Shift[] = ['general', 'morning', 'evening', 'night'];
 const SHIFT_HOURS: Record<Shift, string> = { general: '9 am – 6 pm', morning: '6 am – 2 pm', evening: '2 pm – 10 pm', night: '10 pm – 6 am' };
+// Staff who can sign in to the app (they get access to their whole property). Only the owner invites them.
+const LOGIN_ROLES: StaffRole[] = ['manager', 'warden', 'accountant'];
+type CreatedStaff = Awaited<ReturnType<typeof services.staff.create>> & { invite?: { inviteLink: string; emailSent: boolean } };
 
 function StaffForm({ open, onClose, scope, editing }: { open: boolean; onClose: () => void; scope: 'owner' | 'manager'; editing: StaffView | null }) {
   const props = useQuery(() => (scope === 'owner' && open ? services.properties.list() : Promise.resolve([])), [scope, open]);
-  const blank = { name: '', role: (scope === 'owner' ? 'manager' : 'housekeeping') as StaffRole, propertyId: '', phone: '', email: '', shift: 'general' as Shift, sendInvite: true };
+  const toast = useToast();
+  const blank = { name: '', role: (scope === 'owner' ? 'manager' : 'housekeeping') as StaffRole, propertyId: '', phone: '', email: '', shift: 'general' as Shift, sendInvite: scope === 'owner' };
   const [f, setF] = useState(blank);
   useEffect(() => {
     if (!open) return;
     setF(editing ? { name: editing.name, role: editing.role, propertyId: editing.propertyId ?? '', phone: editing.phone, email: editing.email, shift: editing.shift, sendInvite: false } : blank);
   }, [open, editing?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const canInvite = !editing && scope === 'owner' && LOGIN_ROLES.includes(f.role);
+  const inviting = canInvite && f.sendInvite;
   const save = useMutation((input: StaffInput) => (editing ? services.staff.update(editing.id, input) : services.staff.create(input)), {
-    success: editing ? 'Staff details saved.' : f.sendInvite ? 'Invitation created. In demo mode, no email is sent.' : 'Staff member added.', onSuccess: onClose,
+    success: editing ? 'Staff details saved.' : inviting ? `Invitation sent to ${f.email}.` : 'Staff member added.',
+    onSuccess: (s) => {
+      const invite = (s as CreatedStaff).invite;
+      // Without email set up, hand the link to the owner to share another way.
+      if (invite && !invite.emailSent) {
+        void navigator.clipboard?.writeText(invite.inviteLink).then(
+          () => toast.info('Email isn’t set up, so the invitation link was copied. Send it to them (e.g. on WhatsApp).', 'Invitation link copied'),
+          () => toast.info(`Send this sign-in link: ${invite.inviteLink}`, 'Invitation link'));
+      }
+      onClose();
+    },
   });
   const roles = scope === 'manager' ? ROLES.filter((r) => r !== 'manager') : ROLES;
   const e = save.fieldErrors;
   return (
     <Modal open={open} onClose={onClose} title={editing ? `Edit ${editing.name}` : scope === 'owner' ? 'Invite or add staff' : 'Add staff'} size="lg"
-      footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button loading={save.pending} onClick={() => void save.run({ ...f, propertyId: scope === 'owner' ? f.propertyId || undefined : undefined })}>{editing ? 'Save changes' : f.sendInvite ? 'Send invitation' : 'Add staff'}</Button></>}>
+      footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button loading={save.pending} onClick={() => void save.run({ ...f, sendInvite: inviting, propertyId: scope === 'owner' ? f.propertyId || undefined : undefined })}>{editing ? 'Save changes' : inviting ? 'Send invitation' : 'Add staff'}</Button></>}>
       <div className="grid gap-4 sm:grid-cols-2">
         <Input label="Full name" required value={f.name} onChange={(ev) => setF({ ...f, name: ev.target.value })} error={e.name} />
         <Select label="Role" value={f.role} onChange={(ev) => setF({ ...f, role: ev.target.value as StaffRole })} options={roles.map((r) => ({ value: r, label: sentenceCase(r) }))} error={e.role} disabled={!!editing && editing.role === 'manager' && scope === 'manager'} />
@@ -47,7 +64,12 @@ function StaffForm({ open, onClose, scope, editing }: { open: boolean; onClose: 
         <Input label="Email" type="email" required value={f.email} onChange={(ev) => setF({ ...f, email: ev.target.value })} error={e.email} />
         {scope === 'owner' && <Select label="Assigned property" value={f.propertyId} onChange={(ev) => setF({ ...f, propertyId: ev.target.value })} placeholder="All properties (head office)" options={(props.data ?? []).map((p) => ({ value: p.id, label: p.name }))} />}
         <Select label="Shift" value={f.shift} onChange={(ev) => setF({ ...f, shift: ev.target.value as Shift })} options={SHIFTS.map((s) => ({ value: s, label: `${sentenceCase(s)} (${SHIFT_HOURS[s]})` }))} />
-        {!editing && <Checkbox className="sm:col-span-2" label="Send an invitation to set a password" description="Creates an invite link. Demo mode doesn’t send emails." checked={f.sendInvite} onChange={(ev) => setF({ ...f, sendInvite: ev.target.checked })} />}
+        {canInvite && (
+          <div className="sm:col-span-2">
+            <Checkbox label="Invite them to sign in to the app" description={`Emails ${f.email || 'them'} a link to choose a password. They get access to ${f.propertyId ? 'this property' : 'the property you assign'}.`} checked={f.sendInvite} onChange={(ev) => setF({ ...f, sendInvite: ev.target.checked })} />
+            {(e.sendInvite || e.propertyId) && <p className="mt-1 text-xs font-medium text-brick" role="alert">{e.sendInvite ?? e.propertyId}</p>}
+          </div>
+        )}
       </div>
     </Modal>
   );

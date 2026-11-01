@@ -1,10 +1,9 @@
 import { useEffect, useState, type FormEvent } from 'react';
-import { Laptop, Smartphone } from 'lucide-react';
+import { Laptop } from 'lucide-react';
 import { services } from '@/services';
 import type { OrganizationSettings } from '@/types/domain';
 import { useQuery } from '@/hooks/useQuery';
 import { useMutation } from '@/hooks/useMutation';
-import { useToast } from '@/app/providers/ToastProvider';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardHeader } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
@@ -14,9 +13,10 @@ import { PageSkeleton } from '@/components/ui/States';
 export function SettingsPage() {
   const q = useQuery(() => services.settings.get(), []);
   const [f, setF] = useState<OrganizationSettings | null>(null);
-  const toast = useToast();
   useEffect(() => { if (q.data && !f) setF(q.data); }, [q.data, f]);
-  const save = useMutation(services.settings.update, { success: 'Settings saved. They’ll persist after refresh.', onSuccess: (s) => setF(s) });
+  const save = useMutation(services.settings.update, { success: 'Settings saved.', onSuccess: (s) => setF(s) });
+  // Ends every session of this account, this one included, then returns to sign-in.
+  const signOutAll = useMutation(() => services.auth.logoutAll(), { onSuccess: () => { window.location.assign('/login'); } });
   if (!f || !q.data) return <PageSkeleton />;
   const dirty = JSON.stringify(f) !== JSON.stringify(q.data);
   const set = <K extends keyof OrganizationSettings>(k: K, v: OrganizationSettings[K]) => setF({ ...f, [k]: v });
@@ -44,10 +44,11 @@ export function SettingsPage() {
             <CardHeader title="Rent rules" subtitle="Applied when new monthly charges are raised" />
             <div className="mt-4 grid gap-4 sm:grid-cols-2">
               <Input label="Rent due day" type="number" min={1} max={28} value={f.rentDueDay} onChange={(ev) => set('rentDueDay', Number(ev.target.value))} error={e.rentDueDay} hint="Day of month, 1–28" />
-              <Input label="Late fee per day (₹)" type="number" min={0} value={f.lateFeePerDay} onChange={(ev) => set('lateFeePerDay', Number(ev.target.value))} error={e.lateFeePerDay} />
+              <Input label="Late fee (₹, flat)" type="number" min={0} value={f.lateFeeFlat} onChange={(ev) => set('lateFeeFlat', Number(ev.target.value))} error={e.lateFeeFlat} hint="Added once per month when rent is still unpaid. 0 = off" />
+              <Input label="Grace period (days)" type="number" min={0} max={30} value={f.lateFeeGraceDays} onChange={(ev) => set('lateFeeGraceDays', Number(ev.target.value))} error={e.lateFeeGraceDays} hint="Days after the due date before the late fee" />
               <Input label="Currency" value="Indian Rupee (₹)" disabled />
-              <Input label="Time zone" value="Asia/Kolkata (IST)" disabled />
             </div>
+            <div className="mt-2"><Switch label="Pro-rate the first month" description="A resident who moves in mid-month pays only for the days they stay" checked={f.prorateFirstMonth} onChange={(v) => set('prorateFirstMonth', v)} /></div>
           </Card>
           <Card className="p-5">
             <CardHeader title="Notify me about" />
@@ -59,17 +60,13 @@ export function SettingsPage() {
           </Card>
         </div>
         <Card className="p-5">
-          <CardHeader title="Security" subtitle="Demo controls — authentication is mocked" />
+          <CardHeader title="Security" subtitle="Sessions and sign-in" />
           <div className="mt-2 divide-y divide-line/70">
-            <Switch label="Require two-step verification" description="OTP on sign-in for all staff (not enforced in demo)" checked={f.security.twoFactor} onChange={(v) => set('security', { ...f.security, twoFactor: v })} />
-            <div className="py-3"><Select label="Sign out after inactivity" value={String(f.security.sessionTimeoutMins)} onChange={(ev) => set('security', { ...f.security, sessionTimeoutMins: Number(ev.target.value) })} options={[15, 30, 60, 240].map((m) => ({ value: String(m), label: m < 60 ? `${m} minutes` : `${m / 60} hour${m > 60 ? 's' : ''}` }))} /></div>
+            <Switch label="Require two-step verification" description="Saved as your preference. Sign-in OTP is not available yet, so it is not enforced." checked={f.security.twoFactor} onChange={(v) => set('security', { ...f.security, twoFactor: v })} />
+            <div className="py-3"><Select label="Sign out after inactivity" hint="Saved as your preference; sessions currently last until sign-out or 30 days." value={String(f.security.sessionTimeoutMins)} onChange={(ev) => set('security', { ...f.security, sessionTimeoutMins: Number(ev.target.value) })} options={[15, 30, 60, 240].map((m) => ({ value: String(m), label: m < 60 ? `${m} minutes` : `${m / 60} hour${m > 60 ? 's' : ''}` }))} /></div>
           </div>
-          <h3 className="mb-2 mt-4 text-base font-semibold">Active sessions</h3>
-          <ul className="space-y-2 text-sm">
-            <li className="flex items-center gap-3 rounded-xl bg-sand/50 px-3 py-2"><Laptop className="size-4 text-dust" aria-hidden /><span className="flex-1">This browser · Lucknow</span><span className="text-xs text-moss">Current</span></li>
-            <li className="flex items-center gap-3 rounded-xl bg-sand/50 px-3 py-2"><Smartphone className="size-4 text-dust" aria-hidden /><span className="flex-1">Android app · 2 days ago (sample)</span></li>
-          </ul>
-          <Button variant="secondary" size="sm" className="mt-3" onClick={() => toast.info('Other sessions would be signed out. Sessions are simulated in demo mode.')}>Sign out other sessions</Button>
+          <p className="mt-4 flex items-center gap-2 text-sm text-bark"><Laptop className="size-4 text-dust" aria-hidden />Signed in on other devices or browsers you don’t recognise?</p>
+          <Button variant="secondary" size="sm" className="mt-3" loading={signOutAll.pending} onClick={() => void signOutAll.run()}>Sign out everywhere</Button>
         </Card>
       </div>
     </form>
