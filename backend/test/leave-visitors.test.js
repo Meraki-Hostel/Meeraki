@@ -75,6 +75,21 @@ describe("leave", () => {
     assert.equal((await s.post(`/leave/${started.id}/cancel`)).status, 409, "leave already under way was cancelled");
   });
 
+  test("leave is at most 30 days", async () => {
+    const s = await as(w.users.studentA);
+    const long = await s.post("/leave", leave(plus(2), plus(33)));
+    assert.equal(long.status, 422);
+    assert.ok(long.body.error.fieldErrors.to);
+    assert.equal((await s.post("/leave", leave(plus(2), plus(32)))).status, 201);
+  });
+
+  test("dates that don't exist are refused instead of rolling over", async () => {
+    const res = await (await as(w.users.studentA)).post("/leave", leave("2027-02-31", "2027-03-02"));
+    assert.equal(res.status, 422);
+    assert.ok(res.body.error.fieldErrors.from);
+    assert.equal(await prisma.leaveRequest.count(), 0);
+  });
+
   test("lists are scoped and filterable", async () => {
     await (await as(w.users.studentA)).post("/leave", leave());
     await (await as(w.users.studentB)).post("/leave", leave());
@@ -87,7 +102,7 @@ describe("leave", () => {
 
 describe("visitors", () => {
   test("request → approve → check in → check out, with timestamps and notifications", async () => {
-    const v = (await (await as(w.users.studentA)).post("/visitors", visit())).body.data;
+    const v = (await (await as(w.users.studentA)).post("/visitors", visit({ visitDate: todayISO() }))).body.data;
     assert.equal(v.status, "pending");
     assert.equal(v.source, "request");
     const ma = await as(w.users.managerA);
@@ -137,5 +152,42 @@ describe("visitors", () => {
     assert.equal((await owner.get("/visitors", { date: plus(3) })).body.data.length, 1);
     assert.equal((await owner.get("/visitors")).body.data.length, 2);
     assert.equal((await (await as(w.users.studentA)).post(`/visitors/${v.id}/cancel`)).body.data.status, "cancelled");
+  });
+
+  test("visiting hours are 8 am to 7 pm, for requests and walk-ins", async () => {
+    const s = await as(w.users.studentA);
+    for (const visitTime of ["07:59", "19:01"]) {
+      const res = await s.post("/visitors", visit({ visitTime }));
+      assert.equal(res.status, 422, visitTime);
+      assert.ok(res.body.error.fieldErrors.visitTime, visitTime);
+    }
+    assert.equal((await s.post("/visitors", visit({ visitTime: "08:00" }))).status, 201);
+    assert.equal((await s.post("/visitors", visit({ visitTime: "19:00" }))).status, 201);
+    const late = await (await as(w.users.managerA)).post("/visitors/walk-in", { ...visit({ visitTime: "21:00" }), studentId: w.residentA.id });
+    assert.equal(late.status, 422);
+  });
+
+  test("visits can be booked up to 30 days ahead, on real dates only", async () => {
+    const s = await as(w.users.studentA);
+    assert.equal((await s.post("/visitors", visit({ visitDate: plus(30) }))).status, 201);
+    const far = await s.post("/visitors", visit({ visitDate: plus(31) }));
+    assert.equal(far.status, 422);
+    assert.ok(far.body.error.fieldErrors.visitDate);
+    assert.equal((await s.post("/visitors", visit({ visitDate: "2027-02-31" }))).status, 422);
+    assert.equal((await (await as(w.users.owner)).get("/visitors", { date: "2027-02-31" })).status, 422);
+  });
+
+  test("an approved visit can only be checked in on its date", async () => {
+    const v = (await (await as(w.users.studentA)).post("/visitors", visit({ visitDate: plus(2) }))).body.data;
+    const ma = await as(w.users.managerA);
+    await ma.post(`/visitors/${v.id}/decide`, { decision: "approved" });
+    assert.equal((await ma.post(`/visitors/${v.id}/check-in`)).status, 409);
+    assert.equal((await prisma.visitorRequest.findUnique({ where: { id: v.id } })).status, "approved");
+  });
+
+  test("a walk-in is logged for today even if another date is sent", async () => {
+    const res = await (await as(w.users.managerA)).post("/visitors/walk-in", { ...visit({ visitDate: plus(5) }), studentId: w.residentA.id });
+    assert.equal(res.status, 201, JSON.stringify(res.body));
+    assert.equal(res.body.data.visitDate, todayISO());
   });
 });

@@ -7,6 +7,8 @@ import { logActivity, notifyStudentUsers, notifyStaffUsers, notifyUsers } from "
 import { settingsFor } from "../settings/settings.service.js";
 
 const day = (d) => new Date(`${d}T00:00:00.000Z`);
+const addDays = (d, n) => new Date(day(d).getTime() + n * 864e5).toISOString().slice(0, 10);
+const MAX_LEAVE_DAYS = 30;
 
 export async function toViews(rows) {
   const ids = (k) => [...new Set(rows.map((r) => r[k]))];
@@ -46,6 +48,7 @@ export async function create(auth, actorName, input) {
   const today = todayISO();
   if (input.from < today) e.from = "Leave cannot start in the past";
   if (input.to < input.from) e.to = "Return date must be on or after the start date";
+  else if (input.to > addDays(input.from, MAX_LEAVE_DAYS)) e.to = `Leave longer than ${MAX_LEAVE_DAYS} days needs the office's approval`;
   if (!isIndianPhone(input.contactPhone)) e.contactPhone = "Enter a 10-digit Indian mobile number";
   if (input.destination.trim().length < 2) e.destination = "Where are you going?";
   if (input.reason.trim().length < 3) e.reason = "Give a reason";

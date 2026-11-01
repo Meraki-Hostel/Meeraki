@@ -6,8 +6,9 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { authenticate } from "../../middleware/authenticate.js";
 import { validate } from "../../middleware/validate.js";
 import { actorName } from "../../utils/sideEffects.js";
+import { isCalendarDate } from "../../utils/validators.js";
 
-const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use the format YYYY-MM-DD");
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use the format YYYY-MM-DD").refine(isCalendarDate, "That date doesn't exist");
 const createSchema = z.object({
   from: isoDate, to: isoDate, destination: z.string().max(200), contactPhone: z.string(), reason: z.string().max(1000),
 });
