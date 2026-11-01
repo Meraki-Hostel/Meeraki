@@ -123,7 +123,8 @@ describe("invitations", () => {
     const mgr = await as(w.users.managerA);
     const res = await mgr.post("/invitations", { studentId: w.waitlistA.id });
     assert.equal(res.status, 201, JSON.stringify(res.body));
-    assert.equal(res.body.data.emailSent, true);
+    // Console mail only logs the message, so the link is handed to the admin instead.
+    assert.equal(res.body.data.emailSent, false);
     assert.equal(res.body.data.invitation.role, "student");
     assert.equal(outbox.at(-1).to, w.waitlistA.email);
     const token = linkToken(res.body.data.inviteLink);
@@ -205,7 +206,7 @@ describe("invitations", () => {
       college: "C", course: "B.A.", year: 1, joinedOn: "2026-01-10", monthlyRent: 9000,
     });
     assert.equal(res.status, 201, JSON.stringify(res.body));
-    assert.equal(res.body.data.invite.emailSent, true);
+    assert.equal(res.body.data.invite.emailSent, false);
     assert.equal(outbox.at(-1).to, "newcomer@example.test");
     const token = linkToken(res.body.data.invite.inviteLink);
     assert.equal((await rawRequest().post(`${A}/invitations/accept`).send({ token, password: NEW_PASSWORD })).status, 200);

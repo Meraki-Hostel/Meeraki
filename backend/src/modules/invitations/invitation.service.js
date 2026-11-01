@@ -54,7 +54,9 @@ export async function deliverInvitation({ row, raw }) {
         subject: `${row.invitedBy} invited you to ${org?.name ?? "Meraki"}`,
         text: `Hi ${row.name},\n\n${row.invitedBy} has invited you to Meraki. Open this link to choose your password and activate your account (valid for 7 days):\n\n${inviteLink}\n\nIf you weren't expecting this, you can ignore this email.`,
       });
-      emailSent = true;
+      // Console mode only prints the email in the server log: nobody received it,
+      // so the app should hand the link to the admin instead.
+      emailSent = env.mail.mode !== "console";
     } catch (err) {
       console.error("Invitation email failed:", err.message);
     }
