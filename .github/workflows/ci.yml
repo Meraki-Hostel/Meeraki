@@ -54,6 +54,11 @@ jobs:
         run: npx prisma validate
       - name: Apply migrations to a fresh database
         run: npx prisma migrate deploy
+      - name: Migrations match the schema (no drift)
+        run: |
+          psql "postgresql://meraki:meraki@localhost:5432/meraki_test" -c "CREATE DATABASE meraki_shadow;"
+          npx prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma \
+            --shadow-database-url postgresql://meraki:meraki@localhost:5432/meraki_shadow --exit-code
       - name: Run tests
         run: npm test
 
