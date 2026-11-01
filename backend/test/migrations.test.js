@@ -100,7 +100,7 @@ describe("migration 20261025090000_organizations: backfill", () => {
   test("every existing row joins one new organization", async () => {
     await prisma.staffMember.create({ data: { orgId: w.org.id, name: "S", role: "warden", propertyId: w.A.id, phone: "1", email: "s@example.test", joinedOn: new Date() } });
     await prisma.activityLog.create({ data: { orgId: w.org.id, propertyId: w.A.id, actorName: "a", actorRole: "owner", category: "c", message: "m" } });
-    await prisma.invitation.create({ data: { orgId: w.org.id, token: "inv-m", name: "n", email: "n@example.test", role: "manager", propertyId: w.A.id, invitedBy: "x", expiresAt: new Date() } });
+    await prisma.invitation.create({ data: { orgId: w.org.id, tokenHash: "inv-m", name: "n", email: "n@example.test", role: "manager", propertyId: w.A.id, invitedBy: "x", expiresAt: new Date() } });
     const out = await inRolledBackTx(async (tx) => {
       await preMigration(tx);
       await tx.$executeRawUnsafe(backfill);

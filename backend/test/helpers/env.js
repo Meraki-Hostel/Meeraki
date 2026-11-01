@@ -39,6 +39,10 @@ Object.assign(process.env, {
   // Deliberately different from TEST_PASSWORD so a demo-password backdoor is detectable.
   DEMO_PASSWORD: "demo-backdoor-password",
   PAYMENT_MODE: "simulated",
+  MAIL_MODE: "console",
+  STORAGE_MODE: "local",
+  STORAGE_LOCAL_DIR: `${process.env.TEMP || process.env.TMPDIR || "/tmp"}/meraki-test-uploads`,
+  JOBS_ENABLED: "false",
   RAZORPAY_KEY_ID: "rzp_test_placeholder",
   RAZORPAY_KEY_SECRET: "test-key-secret",
   RAZORPAY_WEBHOOK_SECRET: "test-webhook-secret",

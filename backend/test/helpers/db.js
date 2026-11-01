@@ -25,7 +25,8 @@ export const disconnect = () => prisma.$disconnect();
 let seq = 0;
 const n = () => ++seq;
 
-export const makeOrg = (name = `Org ${n()}`) => prisma.organization.create({ data: { name } });
+// Largest plan, so limits only matter in the tests that set a smaller one.
+export const makeOrg = (name = `Org ${n()}`, planId = "portfolio") => prisma.organization.create({ data: { name, planId } });
 
 export async function makeProperty(org, code, name = `Hostel ${code}`) {
   return prisma.property.create({

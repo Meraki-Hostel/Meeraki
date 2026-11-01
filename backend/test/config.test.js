@@ -23,6 +23,7 @@ const runFile = (file, overrides) => spawnSync(process.execPath, [file], {
 const PROD_OK = {
   NODE_ENV: "production", PAYMENT_MODE: "razorpay", JWT_ACCESS_SECRET: STRONG, JWT_REFRESH_SECRET: STRONG + "y",
   CORS_ORIGINS: "https://app.example.test", RAZORPAY_KEY_ID: "rzp_test_abc", RAZORPAY_KEY_SECRET: "s", RAZORPAY_WEBHOOK_SECRET: "w",
+  MAIL_MODE: "disabled", STORAGE_MODE: "disabled",
 };
 
 before(resetDb);
