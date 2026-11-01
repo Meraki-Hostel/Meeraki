@@ -10,6 +10,10 @@ export const refreshSchema = z.object({ refreshToken: z.string().min(1) });
 export const forgotSchema = z.object({ identifier: z.string().min(1) });
 export const resetSchema = z.object({ token: z.string().min(1), password: z.string() });
 export const acceptInviteSchema = z.object({ token: z.string().min(1), password: z.string() });
+export const changePasswordSchema = z.object({
+  currentPassword: z.string().min(1, "Enter your current password"),
+  newPassword: z.string().min(1, "Enter a new password"),
+});
 export const updateProfileSchema = z.object({
   name: z.string().optional(),
   phone: z.string().optional(),
