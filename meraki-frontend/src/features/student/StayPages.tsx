@@ -2,10 +2,11 @@ import { useState } from 'react';
 import { CheckCheck, FileText, MapPin, Phone, ShieldAlert, Siren, Trash2 } from 'lucide-react';
 import { services } from '@/services';
 import type { AnnouncementCategory, DocumentRecord, Feedback, FeedbackCategory } from '@/types/domain';
+import type { EmergencyType } from '@/services/interfaces';
+import { Modal } from '@/components/ui/Modal';
 import { useQuery } from '@/hooks/useQuery';
 import { useMutation } from '@/hooks/useMutation';
 import { useConfirm } from '@/app/providers/ConfirmProvider';
-import { useToast } from '@/app/providers/ToastProvider';
 import { PageHeader } from '@/components/layout/PageHeader';
 import { Card, CardHeader, ProgressBar } from '@/components/ui/Card';
 import { Button, IconButton } from '@/components/ui/Button';
@@ -66,8 +67,9 @@ export function StudentNoticesPage() {
 function DocRow({ d }: { d: DocumentRecord }) {
   const confirm = useConfirm();
   const [err, setErr] = useState<string>();
-  const up = useMutation((file: File) => services.documents.upload(d.id, { name: file.name, sizeKb: Math.max(1, Math.round(file.size / 1024)) }), { success: 'Uploaded. The office will review it soon.', toastErrors: false });
+  const up = useMutation((file: File) => services.documents.upload(d.id, file), { success: 'Uploaded. The office will review it soon.', toastErrors: false });
   const rm = useMutation(() => services.documents.remove(d.id), { success: 'File removed.' });
+  const view = useMutation(async () => { window.open(await services.documents.fileUrl(d.id), '_blank', 'noopener'); });
   const canUpload = d.status === 'missing' || d.status === 'rejected';
   return (
     <li className="py-4">
@@ -75,7 +77,9 @@ function DocRow({ d }: { d: DocumentRecord }) {
         <FileText className="mt-0.5 size-5 text-dust" aria-hidden />
         <div className="min-w-0 flex-1">
           <p className="text-sm font-medium">{DOC_LABEL[d.type]}</p>
-          <p className="text-xs text-dust">{d.fileName ? `${d.fileName} · ${d.fileSizeKb} KB · ${formatDate(d.uploadedAt)}` : 'Not uploaded yet'}</p>
+          <p className="text-xs text-dust">{d.fileName ? <>
+            <button type="button" className="font-medium text-clay-700 hover:underline" disabled={view.pending} onClick={() => void view.run()}>{d.fileName}</button> · {d.fileSizeKb} KB · {formatDate(d.uploadedAt)}
+          </> : 'Not uploaded yet'}</p>
           {d.status === 'rejected' && d.note && <p className="mt-1 text-xs font-medium text-brick">{d.note}</p>}
         </div>
         <StatusBadge kind="document" value={d.status} />
@@ -98,7 +102,7 @@ export function StudentDocumentsPage() {
   const verified = docs.filter((d) => d.status === 'verified').length;
   return (
     <>
-      <PageHeader title="Documents" subtitle="Upload what the office needs for your stay. Files stay on this device — demo mode stores names only." />
+      <PageHeader title="Documents" subtitle="Upload what the office needs for your stay. Files are stored privately; only you and the hostel office can open them." />
       <Card className="p-5">
         {!q.data ? <Skeleton className="h-64" /> : (
           <>
@@ -154,23 +158,33 @@ const NATIONAL = [['Police / emergency', '112'], ['Ambulance', '108'], ['Fire', 
 export function StudentEmergencyPage() {
   const me = useQuery(() => services.students.me(), []);
   const prop = useQuery(() => (me.data ? services.properties.get(me.data.student.propertyId) : Promise.resolve(null)), [me.data?.student.propertyId]);
-  const confirm = useConfirm();
-  const toast = useToast();
+  const [reporting, setReporting] = useState(false);
+  const [type, setType] = useState<EmergencyType>('medical');
+  const [message, setMessage] = useState('');
+  const raise = useMutation(() => services.emergency.raise({ type, message: message.trim() || `${sentenceCase(type)} emergency` }), {
+    success: 'Alert sent. The manager and the owner have been notified with your room number.',
+    onSuccess: () => { setReporting(false); setMessage(''); },
+  });
   if (!me.data || !prop.data) return <PageSkeleton />;
   const s = me.data.student;
   const p = prop.data;
-  const report = async () => {
-    if (await confirm({ title: 'Alert the hostel office?', message: <>In the live product this would alert the warden and security with your room number. <strong>This demo does not send any alert.</strong> For a real emergency, call 112 now.</>, confirmLabel: 'Send alert (demo)', tone: 'danger' }))
-      toast.info('Demo only: no alert was sent. In a real emergency call 112 or the front desk.', 'Emergency alert simulated');
-  };
+  const report = () => setReporting(true);
   return (
     <>
       <PageHeader title="Emergency" subtitle="Who to call and what to do. Save these numbers on your phone." />
       <Card className="mb-5 flex flex-col items-start gap-4 border-brick/30 bg-brick-wash/40 p-5 sm:flex-row sm:items-center">
         <Siren className="size-8 text-brick" aria-hidden />
         <div className="flex-1"><h2 className="text-xl font-semibold">In danger right now?</h2><p className="text-sm text-bark">Call <a href="tel:112" className="font-semibold underline">112</a> first, then alert the front desk.</p></div>
-        <Button variant="danger" size="lg" icon={<ShieldAlert className="size-5" />} onClick={() => void report()}>Report an emergency</Button>
+        <Button variant="danger" size="lg" icon={<ShieldAlert className="size-5" />} onClick={report}>Report an emergency</Button>
       </Card>
+      <Modal open={reporting} onClose={() => setReporting(false)} size="sm" title="Alert the hostel office"
+        description="The manager and owner are notified at once with your room number. For danger to life, call 112 first."
+        footer={<><Button variant="secondary" onClick={() => setReporting(false)}>Cancel</Button><Button variant="danger" loading={raise.pending} onClick={() => void raise.run()}>Send alert</Button></>}>
+        <div className="space-y-4">
+          <Select label="What’s happening?" value={type} onChange={(e) => setType(e.target.value as EmergencyType)} options={(['medical', 'fire', 'security', 'other'] as EmergencyType[]).map((t) => ({ value: t, label: sentenceCase(t) }))} />
+          <Textarea label="Details (optional)" rows={3} maxLength={500} value={message} onChange={(e) => setMessage(e.target.value)} error={raise.fieldErrors.message} placeholder="e.g. Roommate fainted, conscious now" />
+        </div>
+      </Modal>
       <div className="grid gap-5 md:grid-cols-2 xl:grid-cols-3">
         <Card className="p-5">
           <CardHeader title="Your hostel" />

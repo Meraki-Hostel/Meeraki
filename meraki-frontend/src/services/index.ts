@@ -1,18 +1,18 @@
-import type {
-  IAnnouncementService, IComplaintService, IDocumentService, IEventService, IFeedbackService, IInventoryService,
-  ILeaveService, IMaintenanceService, ISearchService, ISettingsService, IStaffService, IVisitorService, Services,
-} from './interfaces';
+import type { Services } from './interfaces';
 import { httpAuthService, httpPaymentService } from './http/auth-and-payments';
 import { httpPropertyService, httpRoomService, httpStudentService } from './http/spine';
 import { httpActivityService, httpNotificationService } from './http/misc';
 import { httpAnalyticsService } from './http/analytics';
-import { unavailable } from './unavailable';
+import {
+  httpAnnouncementService, httpComplaintService, httpDocumentService, httpEmergencyService, httpEventService, httpFeedbackService,
+  httpInventoryService, httpLeaveService, httpMaintenanceService, httpSearchService, httpSettingsService, httpStaffService,
+  httpUploadService, httpVisitorService,
+} from './http/operations';
 
 /**
  * Service container for the real application. It talks only to the API at
- * VITE_API_BASE_URL; there is no mock fallback and no per-module switching.
- * Modules without a backend yet are explicit "unavailable" stand-ins (see
- * lib/features.ts). The mock-only prototype lives in /prototype.
+ * VITE_API_BASE_URL; there is no mock fallback. The mock-only prototype lives
+ * in /prototype.
  */
 export const apiBaseUrl: string | undefined = import.meta.env.VITE_API_BASE_URL || undefined;
 export const configError: string | null = apiBaseUrl
@@ -27,21 +27,21 @@ export const services: Services = {
   payments: httpPaymentService,
   notifications: httpNotificationService,
   activity: httpActivityService,
-  analytics: httpAnalyticsService, // composed from the endpoints above
-
-  // No backend yet:
-  complaints: unavailable<IComplaintService>('Complaints'),
-  leave: unavailable<ILeaveService>('Leave'),
-  visitors: unavailable<IVisitorService>('Visitors'),
-  maintenance: unavailable<IMaintenanceService>('Maintenance'),
-  inventory: unavailable<IInventoryService>('Inventory'),
-  announcements: unavailable<IAnnouncementService>('Notices'),
-  events: unavailable<IEventService>('Events'),
-  staff: unavailable<IStaffService>('Staff'),
-  feedback: unavailable<IFeedbackService>('Feedback'),
-  documents: unavailable<IDocumentService>('Documents'),
-  settings: unavailable<ISettingsService>('Settings'),
-  search: unavailable<ISearchService>('Search'),
+  analytics: httpAnalyticsService,
+  complaints: httpComplaintService,
+  leave: httpLeaveService,
+  visitors: httpVisitorService,
+  maintenance: httpMaintenanceService,
+  inventory: httpInventoryService,
+  announcements: httpAnnouncementService,
+  events: httpEventService,
+  staff: httpStaffService,
+  feedback: httpFeedbackService,
+  documents: httpDocumentService,
+  settings: httpSettingsService,
+  search: httpSearchService,
+  emergency: httpEmergencyService,
+  uploads: httpUploadService,
 };
 
 export { subscribeToData } from './subscription';

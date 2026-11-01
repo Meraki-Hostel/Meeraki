@@ -3,7 +3,7 @@ import type {
   ChargeWithBalance, Complaint, ComplaintCategory, ComplaintStatus, DocumentRecord, Feedback, FeedbackCategory, HostelEvent,
   EventCategory, EventStatus, ID, InventoryCategory, InventoryItem, InventoryTransaction, InventoryTxnType, Invitation,
   LeaveRequest, MaintenanceCategory, MaintenanceStatus, MaintenanceTicket, Notification, NotificationCategory,
-  OrganizationSettings, Payment, PaymentMethod, PendingOnlinePayment, Priority, Property, PropertyStatus, PropertyType, Receipt, Role, Room,
+  OrganizationSettings, Payment, PaymentMethod, PendingOnlinePayment, Priority, RentCharge, Property, PropertyStatus, PropertyType, Receipt, Role, Room,
   RoomStatus, RoomType, Session, Shift, StaffMember, StaffRole, StaffStatus, StudentProfile, StudentStatus, SubscriptionPlan, User,
   UserPreferences, VisitorRequest,
 } from '@/types/domain';
@@ -49,7 +49,8 @@ export interface ChargeView extends ChargeWithBalance { studentName: string; stu
 export interface PaymentView extends Payment { studentName: string; studentCode: string; propertyName: string; period: string }
 export interface CollectionSummary { expected: number; collected: number; pending: number; overdue: number; collectionPct: number; overdueCount: number; pendingCount: number }
 
-export interface ComplaintView extends Complaint { studentName: string; propertyName: string; roomNumber?: string; assigneeName?: string }
+export interface AttachmentFile { id: ID; fileName: string; contentType: string; sizeKb: number }
+export interface ComplaintView extends Complaint { studentName: string; propertyName: string; roomNumber?: string; assigneeName?: string; attachmentFiles?: AttachmentFile[] }
 export interface LeaveView extends LeaveRequest { studentName: string; roomNumber?: string; propertyName: string }
 export interface VisitorView extends VisitorRequest { studentName: string; roomNumber?: string; propertyName: string }
 export interface MaintenanceView extends MaintenanceTicket { propertyName: string; assigneeName?: string }
@@ -74,12 +75,21 @@ export interface StudentInput {
   college: string; course: string; year: number; address: string; bloodGroup: string;
   guardianName: string; guardianRelation: string; guardianPhone: string; emergencyName: string; emergencyPhone: string;
   joinedOn: string; monthlyRent: number; bedId?: ID;
+  /** Admission extras: email an invitation to create a sign-in, and raise a refundable deposit. */
+  sendInvite?: boolean; deposit?: number;
 }
 export type StudentSelfUpdate = Pick<StudentProfile, 'email' | 'phone' | 'address' | 'emergencyName' | 'emergencyPhone' | 'bloodGroup'>;
 export interface RecordPaymentInput { chargeId: ID; amount: number; method: PaymentMethod; paidOn: string; reference: string; note?: string }
 export interface ChargeFilters { studentId?: ID; propertyId?: ID; period?: string; status?: ChargeStatus }
 export interface PaymentFilters { studentId?: ID; propertyId?: ID; method?: PaymentMethod; from?: string; to?: string }
-export interface ComplaintInput { category: ComplaintCategory; title: string; description: string; priority: Priority; attachments: string[] }
+export interface ChargeInput { studentId: ID; kind: 'deposit' | 'other'; amount: number; description?: string; dueDate?: string }
+export interface ChargeAdjustment { amount?: number; dueDate?: string; description?: string; reason: string }
+export interface RefundInput { amount: number; reason: string; /** Also lower the charge (deposit returned, waiver), so the due stays settled. */ adjustCharge?: boolean }
+export interface Refund { id: ID; refundNo: string; paymentId: ID; chargeId: ID; studentId: ID; amount: number; reason: string; method: 'gateway' | 'manual'; status: 'pending' | 'processed' | 'failed'; adjustCharge: boolean; createdBy: string; createdAt: string }
+export interface OnlinePaymentResult { status: 'paid' | 'processing' | 'failed'; payment?: Payment }
+export type EmergencyType = 'medical' | 'fire' | 'security' | 'other';
+export interface EmergencyAlertView { id: ID; propertyId: ID; studentId: ID; type: EmergencyType; message: string; location: string; status: 'open' | 'acknowledged' | 'resolved'; acknowledgedBy?: string; acknowledgedAt?: string; resolvedBy?: string; resolvedAt?: string; resolutionNote?: string; createdAt: string; studentName: string; roomNumber?: string; propertyName: string }
+export interface ComplaintInput { category: ComplaintCategory; title: string; description: string; priority: Priority; /** Photos or a short video, uploaded before the complaint is created. */ attachments: File[] }
 export interface ComplaintUpdate { status?: ComplaintStatus; priority?: Priority; assigneeStaffId?: ID | null; note?: string }
 export interface LeaveInput { from: string; to: string; destination: string; contactPhone: string; reason: string }
 export interface VisitorInput { visitorName: string; visitorPhone: string; relation: string; visitDate: string; visitTime: string; purpose: string }
@@ -118,6 +128,9 @@ export interface IAuthService {
   resetPassword(token: string, password: string): Promise<void>;
   getInvitation(token: string): Promise<Invitation>;
   acceptInvitation(token: string, password: string): Promise<void>;
+  changePassword(currentPassword: string, newPassword: string): Promise<void>;
+  /** Ends every session of this account, including this one. */
+  logoutAll(): Promise<void>;
   updateProfile(patch: { name?: string; phone?: string; preferences?: Partial<UserPreferences> }): Promise<User>;
 }
 export interface IPropertyService {
@@ -153,6 +166,14 @@ export interface IPaymentService {
   getReceipt(paymentId: ID): Promise<Receipt>;
   sendReminders(chargeIds: ID[]): Promise<number>;
   payNow(chargeId: ID, method: 'upi' | 'card' | 'netbanking'): Promise<Payment | PendingOnlinePayment>;
+  /** After Razorpay Checkout: the API verifies the payment with Razorpay before crediting it. */
+  verifyOnlinePayment(input: { orderId: string; paymentId: string; signature: string }): Promise<OnlinePaymentResult>;
+  receiptPdf(paymentId: ID): Promise<Blob>;
+  generateCharges(input?: { period?: string; propertyId?: ID }): Promise<{ created: number }>;
+  createCharge(input: ChargeInput): Promise<RentCharge>;
+  adjustCharge(id: ID, input: ChargeAdjustment): Promise<RentCharge>;
+  refund(paymentId: ID, input: RefundInput): Promise<Refund>;
+  listRefunds(filters?: { propertyId?: ID; paymentId?: ID }): Promise<Refund[]>;
 }
 export interface IComplaintService {
   list(filters?: { status?: ComplaintStatus; priority?: Priority; propertyId?: ID; category?: ComplaintCategory }): Promise<ComplaintView[]>;
@@ -216,7 +237,10 @@ export interface IFeedbackService {
 }
 export interface IDocumentService {
   mine(): Promise<DocumentRecord[]>;
-  upload(docId: ID, file: { name: string; sizeKb: number }): Promise<DocumentRecord>;
+  forStudent(studentId: ID): Promise<DocumentRecord[]>;
+  upload(docId: ID, file: File): Promise<DocumentRecord>;
+  /** Short-lived link to view the stored file. */
+  fileUrl(docId: ID): Promise<string>;
   remove(docId: ID): Promise<DocumentRecord>;
   review(docId: ID, decision: 'verified' | 'rejected', note?: string): Promise<DocumentRecord>;
 }
@@ -239,11 +263,18 @@ export interface ISettingsService {
   changePlan(planId: ID): Promise<PlanUsage>;
 }
 export interface ISearchService { search(query: string): Promise<SearchResult[]> }
+export interface IEmergencyService {
+  list(filters?: { status?: EmergencyAlertView['status'] }): Promise<EmergencyAlertView[]>;
+  raise(input: { type: EmergencyType; message: string; location?: string }): Promise<EmergencyAlertView>;
+  acknowledge(id: ID): Promise<EmergencyAlertView>;
+  resolve(id: ID, note?: string): Promise<EmergencyAlertView>;
+}
+export interface IUploadService { fileUrl(uploadId: ID): Promise<string> }
 
 export interface Services {
   auth: IAuthService; properties: IPropertyService; rooms: IRoomService; students: IStudentService; payments: IPaymentService;
   complaints: IComplaintService; leave: ILeaveService; visitors: IVisitorService; maintenance: IMaintenanceService;
   inventory: IInventoryService; announcements: IAnnouncementService; events: IEventService; staff: IStaffService;
   feedback: IFeedbackService; documents: IDocumentService; notifications: INotificationService; activity: IActivityService;
-  analytics: IAnalyticsService; settings: ISettingsService; search: ISearchService;
+  analytics: IAnalyticsService; settings: ISettingsService; search: ISearchService; emergency: IEmergencyService; uploads: IUploadService;
 }

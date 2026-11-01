@@ -83,13 +83,23 @@ describe("student self-service: login account stays in step", () => {
   });
 });
 
-describe("modules that do not exist yet are omitted, not faked as empty", () => {
-  test("[FAKE-EMPTY] student detail does not return fabricated empty complaint/leave/visitor/document lists", async () => {
+describe("student detail carries the resident's real records", () => {
+  test("complaints, leave, visitors and the document checklist come from the database", async () => {
+    await prisma.complaint.create({ data: { ticketNo: "CMP-D1", propertyId: w.A.id, studentId: w.residentA.id, category: "food", title: "Cold food", description: "d", priority: "low",
+      comments: { create: [{ authorUserId: w.users.managerA.id, authorName: "Manager A", authorRole: "manager", body: "staff only", internal: true }] } } });
+    await prisma.leaveRequest.create({ data: { studentId: w.residentA.id, propertyId: w.A.id, fromDate: new Date("2026-12-01"), toDate: new Date("2026-12-03"), destination: "Home", contactPhone: "9876543210", reason: "Visit" } });
     const res = await (await as(w.users.managerA)).get(`/students/${w.residentA.id}`);
     assert.equal(res.status, 200);
-    for (const k of ["complaints", "leaves", "visitors", "documents"]) {
-      assert.equal(k in res.body.data, false, `"${k}" is returned as [] though that module is not implemented`);
-    }
+    assert.equal(res.body.data.complaints.length, 1);
+    assert.equal(res.body.data.complaints[0].comments.length, 1, "staff see internal notes");
+    assert.equal(res.body.data.leaves.length, 1);
+    assert.equal(res.body.data.leaves[0].from, "2026-12-01");
+    assert.deepEqual(res.body.data.visitors, []);
+    assert.equal(res.body.data.documents.length, 6);
+    assert.ok(res.body.data.documents.every((d) => d.status === "missing"));
+    // The resident's own view never includes staff-only notes.
+    const mine = await (await as(w.users.studentA)).get("/students/me");
+    assert.equal(mine.body.data.complaints[0].comments.length, 0);
   });
 
   test("property stats count real open complaints", async () => {

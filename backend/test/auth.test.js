@@ -100,6 +100,20 @@ describe("auth: access follows the database, not the token", () => {
     assert.equal(stillSeesA, false, "old token still reads hostel A after reassignment");
   });
 
+  test("a manager with no property is refused, never shown every tenant's rows", async () => {
+    // Prisma reads `{ propertyId: undefined }` as "no filter"; that must never be reachable.
+    const mgr = await prisma.user.create({
+      data: { orgId: w.org.id, name: "Floating", email: "floating@example.test", phone: "9800077777", role: "manager", title: "m", propertyId: w.A.id,
+        passwordHash: (await prisma.user.findUnique({ where: { id: w.users.managerA.id } })).passwordHash },
+    });
+    const token = (await login(mgr)).body.data.accessToken;
+    await prisma.user.update({ where: { id: mgr.id }, data: { propertyId: null } });
+    for (const path of ["/students", "/complaints", "/charges", "/staff", "/rooms"]) {
+      const res = await api(token).get(path);
+      assert.equal(res.status, 403, `${path} answered ${res.status}`);
+    }
+  });
+
   test("a deleted user's access token stops working", async () => {
     const u = await prisma.user.create({
       data: { orgId: w.org.id, name: "Gone", email: "gone@example.test", phone: "9800088888", role: "manager", title: "m", propertyId: w.A.id,

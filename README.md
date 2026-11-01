@@ -30,13 +30,14 @@ npm run dev                 # http://localhost:5173
 
 Sign in with `owner@demo.com`, `manager@demo.com` or `student@demo.com` (password `meraki@123`).
 
-## What's on the real API so far
+## What's on the real API
 
-Auth, properties, rooms/beds, students, payments, notifications and activity.
-Complaints, leave, visitors, maintenance, inventory, staff, announcements,
-events, feedback, documents, analytics, settings and search still run on the
-frontend mock (demo data) until their backend modules are built. See
-`backend/README.md` → "Adding the remaining modules".
+Everything the app shows: accounts and invitations, properties, rooms and beds,
+residents, billing (automatic monthly rent, late fees, deposits, refunds, PDF
+receipts), online rent through Razorpay, complaints, leave, visitors,
+maintenance, inventory, staff, notices, events, feedback, documents (Cloudflare
+R2), emergency alerts, analytics, settings, plans and search. See
+`backend/README.md` for setup, configuration and the endpoint list.
 
 ## Working in this repo
 

@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { Paperclip } from 'lucide-react';
 import { services } from '@/services';
 import type { ComplaintView, StaffView } from '@/services/interfaces';
 import type { ComplaintStatus, Priority } from '@/types/domain';
@@ -12,6 +11,7 @@ import { DescriptionList } from '@/components/ui/Card';
 import { StatusBadge, statusOptions } from '@/components/ui/StatusBadge';
 import { formatDateTime, sentenceCase } from '@/lib/format';
 import { ComplaintTimeline } from './ComplaintTimeline';
+import { AttachmentList } from './AttachmentList';
 
 /** Staff-side complaint detail with triage controls, used by Manager and Owner. */
 export function ComplaintDrawer({ complaintId, onClose, staff }: { complaintId: string | null; onClose: () => void; staff: StaffView[] }) {
@@ -46,7 +46,7 @@ export function ComplaintDrawer({ complaintId, onClose, staff }: { complaintId: 
           <div>
             <h3 className="mb-1 font-sans text-xs font-medium text-dust">Description</h3>
             <p className="whitespace-pre-line text-sm text-espresso">{c.description}</p>
-            {c.attachments.length > 0 && <ul className="mt-2 flex flex-wrap gap-2">{c.attachments.map((a) => <li key={a} className="inline-flex items-center gap-1 rounded-lg border border-line bg-white px-2 py-1 text-xs text-bark"><Paperclip className="size-3" aria-hidden />{a}</li>)}</ul>}
+            <AttachmentList complaint={c} />
           </div>
 
           <section className="rounded-2xl border border-line bg-white/60 p-4" aria-labelledby="triage-h">

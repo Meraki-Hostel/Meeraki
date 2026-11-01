@@ -13,6 +13,7 @@
     "prisma:deploy": "prisma migrate deploy",
     "db:seed": "node prisma/seed.js",
     "db:seed:prod": "node prisma/seed-prod.js",
+    "job": "node src/jobs/cli.js",
     "test": "node --test --test-reporter=spec --test-concurrency=1 \"test/**/*.test.js\"",
     "test:strict": "STRICT_DEFECTS=1 node --test --test-reporter=spec --test-concurrency=1 \"test/**/*.test.js\"",
     "test:db:up": "sh scripts/test-db.sh up",

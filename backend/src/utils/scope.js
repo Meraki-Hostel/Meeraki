@@ -33,6 +33,9 @@ export async function propertyScope(auth, requested) {
     }
     return { property: { orgId: auth.orgId } };
   }
+  // Defence in depth (authenticate already refuses this): never return a filter
+  // that Prisma would read as "match everything".
+  if (!auth.propertyId) throw forbidden();
   if (requested && requested !== auth.propertyId) throw forbidden();
   return { propertyId: auth.propertyId };
 }

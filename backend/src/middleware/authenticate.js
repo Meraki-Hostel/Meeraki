@@ -1,6 +1,6 @@
 import { verifyAccessToken } from "../utils/tokens.js";
 import { prisma } from "../config/prisma.js";
-import { unauthenticated } from "../utils/ApiError.js";
+import { unauthenticated, forbidden } from "../utils/ApiError.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 
 // Verifies the Bearer token sent by web OR app and sets req.auth (the acting
@@ -28,6 +28,11 @@ export const authenticate = asyncHandler(async (req, _res, next) => {
   if (user.role !== payload.role) throw unauthenticated("Your access has changed. Sign in again.");
   // Password changed or "sign out everywhere" since this token was issued.
   if ((payload.tv ?? 0) !== user.tokenVersion) throw unauthenticated();
+  // Managers and students are scoped to one property. Without one, a scope filter
+  // would be `{ propertyId: undefined }`, which Prisma treats as "no filter" and
+  // would match every tenant's rows. Refuse instead of ever building that query.
+  if (user.role !== "owner" && !user.propertyId) throw forbidden("Your account isn't linked to a hostel yet. Contact your hostel admin.");
+  if (user.role === "student" && !user.studentId) throw forbidden("Your account isn't linked to a resident record. Contact your hostel admin.");
 
   req.auth = {
     userId: user.id,
