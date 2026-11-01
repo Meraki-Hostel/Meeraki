@@ -1,6 +1,7 @@
 import { z } from "zod";
+import { isCalendarDate } from "../../utils/validators.js";
 
-const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use the format YYYY-MM-DD");
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use the format YYYY-MM-DD").refine(isCalendarDate, "That date doesn't exist");
 
 export const recordPaymentSchema = z.object({
   chargeId: z.string().min(1),

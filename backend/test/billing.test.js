@@ -108,6 +108,16 @@ describe("deposits, one-off charges and adjustments", () => {
     assert.equal((await balance(mgr, w.chargeA.id, w.residentA.id)).balance, 1000);
     assert.equal(await prisma.activityLog.count({ where: { message: { contains: "Partial waiver agreed" } } }), 1);
   });
+
+  test("due dates that don't exist are refused instead of rolling over", async () => {
+    const mgr = await as(w.users.managerA);
+    const created = await mgr.post("/charges", { studentId: w.residentA.id, kind: "other", amount: 500, description: "Lost key", dueDate: "2026-02-30" });
+    assert.equal(created.status, 422);
+    assert.ok(created.body.error.fieldErrors.dueDate);
+    const adjusted = await mgr.patch(`/charges/${w.chargeA.id}`, { dueDate: "2026-04-31", reason: "Moved due date" });
+    assert.equal(adjusted.status, 422);
+    assert.ok(adjusted.body.error.fieldErrors.dueDate);
+  });
 });
 
 describe("refunds", () => {
