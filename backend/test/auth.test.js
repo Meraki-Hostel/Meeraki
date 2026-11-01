@@ -164,6 +164,16 @@ describe("auth: the token proves identity; the database decides scope", () => {
     assert.deepEqual(Object.keys(jwt.decode(token)).sort(), ["exp", "iat", "role", "sub", "tv"]);
   });
 
+  test("password guessing locks one account out, not everyone sharing the connection", async () => {
+    const guess = (identifier) => rawRequest().post("/api/v1/auth/login").send({ role: "manager", identifier, password: "wrong-password-1" });
+    for (let i = 0; i < 10; i++) assert.equal((await guess("target@example.test")).status, 401);
+    const blocked = await guess("target@example.test");
+    assert.equal(blocked.status, 429);
+    assert.match(blocked.body.error.message, /Too many sign-in attempts/, "429 must use the API error envelope");
+    // A neighbour on the same IP signs in normally.
+    assert.equal((await login(w.users.managerB)).status, 200);
+  });
+
   test("an unknown account and a wrong password are indistinguishable", async () => {
     const wrong = await login(w.users.managerA, "wrong-password-1");
     const unknown = await rawRequest().post("/api/v1/auth/login").send({ role: "manager", identifier: "nobody@example.test", password: "wrong-password-1" });

@@ -12,21 +12,36 @@ Each folder has its own `package.json` and README; there is no shared root insta
 
 ## Run the real app locally
 
+Needs Node 22+ and Docker (for the local database).
+
 ```bash
-# 1. API (needs PostgreSQL — local or Neon; see backend/README.md)
+# 1. Database (repo root): PostgreSQL 16 on 127.0.0.1:5433, data kept in a Docker volume
+docker compose up -d db
+
+# 2. API
 cd backend
 npm install
-cp .env.example .env        # fill in DATABASE_URL, DIRECT_URL, JWT secrets
-npm run prisma:migrate
-npm run db:seed
-npm run dev                 # http://localhost:4000/health
+npx prisma generate
+cp .env.example .env        # then set DATABASE_URL / DIRECT_URL to
+                            # postgresql://meraki:meraki_local_dev@127.0.0.1:5433/meraki_dev
+                            # and two random JWT secrets
+npm run prisma:deploy       # create the tables
+npm run db:seed             # demo data for every screen (first time only)
+npm run dev                 # http://localhost:4000/ready
 
-# 2. Frontend (new terminal)
+# 3. Frontend (new terminal)
 cd meraki-frontend
 npm install
-cp .env.example .env        # VITE_API_BASE_URL=http://localhost:4000/api/v1
+echo VITE_API_BASE_URL=http://localhost:4000/api/v1 > .env.local
 npm run dev                 # http://localhost:5173
 ```
+
+Locally, payments are simulated (no money moves), emails are printed in the API
+terminal (password-reset and invitation links appear there), and uploaded files
+are kept in `backend/uploads`. Switch to Razorpay, Resend and Cloudflare R2 in
+`backend/.env` (see `backend/README.md`).
+
+Stop the database with `docker compose down` (data kept); `docker compose down -v` deletes it.
 
 Sign in with `owner@demo.com`, `manager@demo.com` or `student@demo.com` (password `meraki@123`).
 
