@@ -7,7 +7,8 @@ import { useQuery } from '@/hooks/useQuery';
 import { useMutation } from '@/hooks/useMutation';
 import { Modal } from '@/components/ui/Modal';
 import { Button } from '@/components/ui/Button';
-import { Input, Select, Textarea } from '@/components/ui/Field';
+import { Checkbox, Input, Select, Textarea } from '@/components/ui/Field';
+import { useToast } from '@/app/providers/ToastProvider';
 import { DescriptionList } from '@/components/ui/Card';
 import { BedPicker } from '@/components/domain/BedPicker';
 import { rules, validate } from '@/lib/validation';
@@ -16,20 +17,23 @@ import { formatDate, formatINR, formatPhone } from '@/lib/format';
 import { cn } from '@/lib/cn';
 
 const STEPS = ['Personal', 'Guardian & emergency', 'Bed & rent', 'Review'];
-type Form = Record<keyof Omit<StudentInput, 'year' | 'monthlyRent' | 'bedId'>, string> & { year: string; monthlyRent: string; bedId: string };
+type Form = Record<keyof Omit<StudentInput, 'year' | 'monthlyRent' | 'bedId' | 'deposit' | 'sendInvite'>, string> & { year: string; monthlyRent: string; bedId: string; deposit: string };
+type Created = Awaited<ReturnType<typeof services.students.create>> & { invite?: { inviteLink: string; emailSent: boolean } };
 
-const blank = (): Form => ({ name: '', email: '', phone: '', gender: 'male', dob: '', studentCode: '', college: '', course: '', year: '1', address: '', bloodGroup: 'O+', guardianName: '', guardianRelation: 'Father', guardianPhone: '', emergencyName: '', emergencyPhone: '', joinedOn: todayISO(), monthlyRent: '', bedId: '' });
+const blank = (): Form => ({ name: '', email: '', phone: '', gender: 'male', dob: '', studentCode: '', college: '', course: '', year: '1', address: '', bloodGroup: 'O+', guardianName: '', guardianRelation: 'Father', guardianPhone: '', emergencyName: '', emergencyPhone: '', joinedOn: todayISO(), monthlyRent: '', bedId: '', deposit: '' });
 
 /** Four-step add-student wizard. Validates per step; the service re-validates duplicates on submit. */
 export function StudentWizard({ open, onClose }: { open: boolean; onClose: () => void }) {
   const navigate = useNavigate();
   const [step, setStep] = useState(0);
   const [f, setF] = useState<Form>(blank);
+  const [sendInvite, setSendInvite] = useState(true);
+  const toast = useToast();
   const [errors, setErrors] = useState<Record<string, string>>({});
   const rooms = useQuery(() => (open ? services.rooms.list() : Promise.resolve([])), [open]);
   useEffect(() => {
     if (!open) return;
-    setStep(0); setErrors({}); const b = blank(); setF(b);
+    setStep(0); setErrors({}); setSendInvite(true); const b = blank(); setF(b);
     void services.students.nextStudentCode().then((code) => setF((x) => ({ ...x, studentCode: code })));
   }, [open]);
   const set = (k: keyof Form, v: string) => { setF((x) => ({ ...x, [k]: v })); setErrors((e) => ({ ...e, [k]: '' })); };
@@ -37,7 +41,19 @@ export function StudentWizard({ open, onClose }: { open: boolean; onClose: () =>
   const bed = bedRoom?.beds.find((b) => b.id === f.bedId);
   useEffect(() => { if (bedRoom) setF((x) => ({ ...x, monthlyRent: String(bedRoom.rent) })); }, [bedRoom?.id]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  const create = useMutation(services.students.create, { success: (s) => `${s.name} added${f.bedId ? ' and allotted a bed' : ''}.`, onSuccess: (s) => { onClose(); navigate(`/manager/students/${s.id}`); } });
+  const create = useMutation(services.students.create, {
+    success: (s) => `${s.name} added${f.bedId ? ' and allotted a bed' : ''}.`,
+    onSuccess: (s) => {
+      const invite = (s as Created).invite;
+      // Without email set up, the link still exists: hand it to the manager to share another way.
+      if (invite && !invite.emailSent) {
+        void navigator.clipboard?.writeText(invite.inviteLink).then(
+          () => toast.info('Email isn’t set up, so the sign-in invitation link was copied. Send it to the student (e.g. on WhatsApp).', 'Invitation link copied'),
+          () => toast.info(`Send this sign-in link to the student: ${invite.inviteLink}`, 'Invitation link'));
+      }
+      onClose(); navigate(`/manager/students/${s.id}`);
+    },
+  });
   useEffect(() => {
     const fe = create.fieldErrors;
     if (!Object.keys(fe).length) return;
@@ -58,7 +74,7 @@ export function StudentWizard({ open, onClose }: { open: boolean; onClose: () =>
     return Object.keys(v).length === 0;
   };
   const next = () => { if (checkStep()) setStep((s) => s + 1); };
-  const submit = () => void create.run({ ...f, gender: f.gender as StudentInput['gender'], year: Number(f.year), monthlyRent: Number(f.monthlyRent), bedId: f.bedId || undefined });
+  const submit = () => void create.run({ ...f, gender: f.gender as StudentInput['gender'], year: Number(f.year), monthlyRent: Number(f.monthlyRent), bedId: f.bedId || undefined, deposit: Number(f.deposit) || undefined, sendInvite });
 
   return (
     <Modal open={open} onClose={onClose} size="xl" title="Add student" description="Admission details, guardian, and bed allotment."
@@ -105,8 +121,9 @@ export function StudentWizard({ open, onClose }: { open: boolean; onClose: () =>
           <div className="grid gap-4 sm:grid-cols-3">
             <Input label="Monthly rent (₹)" type="number" required value={f.monthlyRent} onChange={(e) => set('monthlyRent', e.target.value)} error={errors.monthlyRent} hint={bedRoom ? `Room ${bedRoom.number} rate` : 'Set from the bed you pick'} />
             <Input label="Move-in date" type="date" required value={f.joinedOn} onChange={(e) => set('joinedOn', e.target.value)} error={errors.joinedOn} />
-            <div className="flex items-end">{f.bedId ? <Button variant="ghost" size="sm" onClick={() => set('bedId', '')}>Skip bed for now</Button> : <p className="text-xs text-dust">No bed selected — the student will be “Awaiting bed”.</p>}</div>
+            <Input label="Security deposit (₹)" type="number" min={0} value={f.deposit} onChange={(e) => set('deposit', e.target.value)} error={errors.deposit} hint="Refundable. Leave empty for none" />
           </div>
+          <div>{f.bedId ? <Button variant="ghost" size="sm" onClick={() => set('bedId', '')}>Skip bed for now</Button> : <p className="text-xs text-dust">No bed selected — the student will be “Awaiting bed” and is billed once a bed is allotted.</p>}</div>
         </div>
       )}
       {step === 3 && (
@@ -116,8 +133,10 @@ export function StudentWizard({ open, onClose }: { open: boolean; onClose: () =>
             { label: 'Email', value: f.email }, { label: 'College', value: `${f.college}, ${f.course} (Year ${f.year})` }, { label: 'Date of birth', value: formatDate(f.dob) },
             { label: 'Guardian', value: `${f.guardianName} (${f.guardianRelation}) · ${formatPhone(f.guardianPhone)}` }, { label: 'Emergency', value: `${f.emergencyName} · ${formatPhone(f.emergencyPhone)}` },
             { label: 'Bed', value: bed && bedRoom ? `Room ${bedRoom.number}, Bed ${bed.label}` : 'Not allotted yet' }, { label: 'Rent', value: formatINR(Number(f.monthlyRent)) }, { label: 'Move-in', value: formatDate(f.joinedOn) },
+            { label: 'Deposit', value: Number(f.deposit) > 0 ? formatINR(Number(f.deposit)) : 'None' },
           ]} />
-          <p className="rounded-xl bg-sand/60 px-3 py-2 text-xs text-bark">On save: the student{f.bedId ? ' and their bed' : ''} are recorded. Rent dues and the document checklist are not created automatically yet.</p>
+          <Checkbox label="Invite the student to sign in" description={`Sends a link to ${f.email || 'their email'} to choose a password and see rent, notices and requests.`} checked={sendInvite} onChange={(e) => setSendInvite(e.target.checked)} />
+          <p className="rounded-xl bg-sand/60 px-3 py-2 text-xs text-bark">On save: the student{f.bedId ? ' and their bed' : ''} are recorded{f.bedId ? ', and this month’s rent is raised (pro-rated from the move-in date)' : ''}{Number(f.deposit) > 0 ? ', plus the security deposit' : ''}. Rent is then raised automatically on the 1st of each month.</p>
         </div>
       )}
     </Modal>
