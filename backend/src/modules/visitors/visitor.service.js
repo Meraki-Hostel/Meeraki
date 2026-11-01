@@ -6,6 +6,9 @@ import { isIndianPhone, normalizePhone } from "../../utils/validators.js";
 import { logActivity, notifyStudentUsers, notifyStaffUsers } from "../../utils/sideEffects.js";
 
 const day = (d) => new Date(`${d}T00:00:00.000Z`);
+const addDays = (d, n) => new Date(day(d).getTime() + n * 864e5).toISOString().slice(0, 10);
+const VISITING_HOURS = ["08:00", "19:00"];
+const MAX_DAYS_AHEAD = 30;
 
 export async function toViews(rows) {
   const ids = (k) => [...new Set(rows.map((r) => r[k]))];
@@ -37,6 +40,8 @@ function check(input, { allowPast = false } = {}) {
   if (!isIndianPhone(input.visitorPhone)) e.visitorPhone = "Enter a 10-digit Indian mobile number";
   if (input.relation.trim().length < 2) e.relation = "How do you know the visitor?";
   if (!allowPast && input.visitDate < todayISO()) e.visitDate = "Visit date cannot be in the past";
+  else if (!allowPast && input.visitDate > addDays(todayISO(), MAX_DAYS_AHEAD)) e.visitDate = `Visits can be booked up to ${MAX_DAYS_AHEAD} days ahead`;
+  if (input.visitTime < VISITING_HOURS[0] || input.visitTime > VISITING_HOURS[1]) e.visitTime = "Visiting hours are 8 am to 7 pm";
   if (Object.keys(e).length) throw invalid(e);
 }
 const fields = (input) => ({
@@ -72,6 +77,7 @@ export async function createWalkIn(auth, actorName, input) {
   if (!s) throw notFound("Student");
   await assertPropertyAccess(auth, s.propertyId);
   if (!["active", "notice"].includes(s.status)) throw conflict("This person is not a current resident.");
+  input = { ...input, visitDate: todayISO() }; // a walk-in is always today, whatever date was sent
   check(input, { allowPast: true });
   const id = await prisma.$transaction(async (tx) => {
     const v = await tx.visitorRequest.create({
@@ -115,6 +121,7 @@ export async function decide(auth, actorName, id, { decision, reason }) {
 
 export async function checkIn(auth, actorName, id) {
   const v = await loadForStaff(auth, id);
+  if (v.status === "approved" && iso(v.visitDate) !== todayISO()) throw conflict(`This visit is booked for ${iso(v.visitDate)}. Check-in opens on that day.`);
   return move(auth, actorName, v, ["approved"], { status: "checked_in", checkInAt: new Date() }, `Visitor ${v.visitorName} checked in`,
     ["Visitor checked in", `${v.visitorName} has arrived to see you.`]);
 }
