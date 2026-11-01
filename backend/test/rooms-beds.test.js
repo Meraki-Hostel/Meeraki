@@ -163,7 +163,7 @@ describe("integrity under concurrency and edge cases", () => {
     const mgr = await as(w.users.managerA);
     const bedId = w.roomA.beds[1].id;
     for (let round = 0; round < 15; round++) {
-      const body = (n) => ({ name: `Racer ${round}-${n}`, email: `r${round}-${n}@example.test`, phone: "9876543210", gender: "male", dob: "2005-01-01",
+      const body = (n) => ({ name: `Racer ${round}-${n}`, email: `r${round}-${n}@example.test`, phone: `9100${String(round).padStart(4, "0")}0${n}`, gender: "male", dob: "2005-01-01",
         college: "c", course: "c", year: 1, joinedOn: "2026-01-01", monthlyRent: 1, bedId });
       const results = await Promise.all([mgr.post("/students", body(1)), mgr.post("/students", body(2))]);
       assert.deepEqual(results.map((r) => r.status).sort(), [201, 422], `round ${round}: ${JSON.stringify(results.map((r) => [r.status, r.body.error?.message]))}`);

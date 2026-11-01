@@ -1,7 +1,7 @@
 import "./helpers/env.js";
 import { describe, test, beforeEach, after } from "node:test";
 import assert from "node:assert/strict";
-import { prisma, resetDb, seedWorld, disconnect, bedInvariantViolations } from "./helpers/db.js";
+import { prisma, resetDb, seedWorld, seedOtherOrg, disconnect, bedInvariantViolations } from "./helpers/db.js";
 import { as } from "./helpers/api.js";
 
 let w;
@@ -99,8 +99,9 @@ describe("modules that do not exist yet are omitted, not faked as empty", () => 
 });
 
 describe("student codes", () => {
+  let seq = 0; // mobile numbers are unique per organization, so each admission gets its own
   const body = (over = {}) => ({
-    name: "Auto Code", email: `auto${Math.random().toString(36).slice(2, 8)}@example.test`, phone: "9876543210",
+    name: "Auto Code", email: `auto${Math.random().toString(36).slice(2, 8)}@example.test`, phone: `90000${String(++seq).padStart(5, "0")}`,
     gender: "male", dob: "2005-02-02", college: "College", course: "BA", year: 1, joinedOn: "2026-01-01", monthlyRent: 9000, ...over,
   });
 
@@ -160,5 +161,72 @@ describe("keeping the sign-in account in step with the profile", () => {
     assert.notEqual(profile.address, "Should not stick", "profile changed although the login update failed");
     const u = await prisma.user.findUnique({ where: { id: w.users.studentA.id } });
     assert.equal(u.email, w.users.studentA.email);
+  });
+});
+
+describe("mobile numbers are unique per organization (#22)", () => {
+  const formatted = (p) => `+91 ${p.slice(0, 5)} ${p.slice(5)}`;
+
+  test("admitting a second resident with an existing number is a 409 on the phone field, in any format", async () => {
+    const mgr = await as(w.users.managerA);
+    for (const phone of [w.residentA.phone, formatted(w.residentA.phone)]) {
+      const res = await mgr.post("/students", newStudent({ phone }));
+      assert.equal(res.status, 409, `${phone} → ${res.status}`);
+      assert.ok(res.body.error.fieldErrors?.phone, phone);
+    }
+    assert.equal(await prisma.studentProfile.count({ where: { studentCode: "ADM001" } }), 0);
+  });
+
+  test("a number held by a resident of another hostel in the same organization is also taken", async () => {
+    const res = await (await as(w.users.managerA)).post("/students", newStudent({ phone: w.residentB.phone }));
+    assert.equal(res.status, 409);
+  });
+
+  test("an older row stored with formatting still counts", async () => {
+    await prisma.studentProfile.update({ where: { id: w.residentB.id }, data: { phone: formatted(w.residentB.phone) } });
+    const res = await (await as(w.users.managerA)).post("/students", newStudent({ phone: w.residentB.phone }));
+    assert.equal(res.status, 409);
+  });
+
+  test("another organization may use the same number; a moved-out resident's number is free again", async () => {
+    const x = await seedOtherOrg();
+    const other = await (await as(x.users.ownerX)).post("/students", newStudent({ phone: w.residentA.phone, propertyId: x.X.id, studentCode: "ADM-X" }));
+    assert.equal(other.status, 201, JSON.stringify(other.body));
+
+    await (await as(w.users.managerA)).patch(`/students/${w.residentA.id}/status`, { status: "moved_out" });
+    const again = await (await as(w.users.managerA)).post("/students", newStudent({ phone: w.residentA.phone }));
+    assert.equal(again.status, 201, JSON.stringify(again.body));
+  });
+
+  test("valid numbers are stored as 10 digits", async () => {
+    const res = await (await as(w.users.managerA)).post("/students", newStudent({ phone: "+91 91234 56789" }));
+    assert.equal(res.body.data.phone, "9123456789");
+  });
+
+  test("a manager editing a resident to another's number is a 409; keeping their own number is fine", async () => {
+    const mgr = await as(w.users.managerA);
+    const clash = await mgr.patch(`/students/${w.waitlistA.id}`, { phone: w.residentA.phone, college: "Should not stick" });
+    assert.equal(clash.status, 409);
+    assert.ok(clash.body.error.fieldErrors?.phone);
+    assert.notEqual((await prisma.studentProfile.findUnique({ where: { id: w.waitlistA.id } })).college, "Should not stick");
+
+    assert.equal((await mgr.patch(`/students/${w.residentA.id}`, { phone: formatted(w.residentA.phone) })).status, 200);
+  });
+
+  test("a resident changing their own number to someone else's is a 409 and their login keeps the old one", async () => {
+    const res = await (await as(w.users.studentA)).patch("/students/self", { phone: w.residentB.phone });
+    assert.equal(res.status, 409);
+    assert.ok(res.body.error.fieldErrors?.phone);
+    assert.equal((await prisma.user.findUnique({ where: { id: w.users.studentA.id } })).phone, w.users.studentA.phone);
+  });
+
+  test("two simultaneous admissions with the same new number: exactly one is created", async () => {
+    const mgr = await as(w.users.managerA);
+    const results = await Promise.all([
+      mgr.post("/students", newStudent({ phone: "9000000001", studentCode: "RACE1", email: "race1@example.test" })),
+      mgr.post("/students", newStudent({ phone: "9000000001", studentCode: "RACE2", email: "race2@example.test" })),
+    ]);
+    assert.deepEqual(results.map((r) => r.status).sort(), [201, 409]);
+    assert.equal(await prisma.studentProfile.count({ where: { phone: "9000000001" } }), 1);
   });
 });
