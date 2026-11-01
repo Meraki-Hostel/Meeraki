@@ -88,9 +88,37 @@ function qs(params?: object): string {
   return s ? `?${s}` : '';
 }
 
+/** Binary download (e.g. a PDF receipt) with the same auth and refresh handling. */
+async function blob(path: string): Promise<Blob> {
+  let res = await raw(path, { method: 'GET' });
+  if (res.status === 401 && (await tryRefresh())) res = await raw(path, { method: 'GET' });
+  if (!res.ok) await parse(res); // throws the typed ServiceError
+  return res.blob();
+}
+
 export const http = {
   get: <T>(path: string, params?: object, auth = true) => request<T>('GET', path + qs(params), undefined, auth),
   post: <T>(path: string, body?: unknown, auth = true) => request<T>('POST', path, body, auth),
   patch: <T>(path: string, body?: unknown, auth = true) => request<T>('PATCH', path, body, auth),
   del: <T>(path: string, auth = true) => request<T>('DELETE', path, undefined, auth),
+  blob,
 };
+
+/**
+ * Uploads one file the way the API expects: ask for a short-lived upload link,
+ * PUT the bytes straight to storage (Cloudflare R2, or the API's local stand-in
+ * in development), and return the upload id to hand to the owning record.
+ */
+export async function uploadFile(purpose: 'document' | 'complaint', file: File): Promise<string> {
+  const contentType = file.type || 'application/octet-stream';
+  const target = await http.post<{ uploadId: string; url: string; method: string; headers: Record<string, string> }>(
+    '/uploads', { purpose, fileName: file.name, contentType, sizeBytes: file.size });
+  let res: Response;
+  try {
+    res = await fetch(target.url, { method: target.method, headers: target.headers, body: file });
+  } catch {
+    throw new ServiceError('UNAVAILABLE', "Couldn't upload the file. Check your connection and try again.");
+  }
+  if (!res.ok) throw new ServiceError('VALIDATION', 'The file upload was refused. Try again.', { file: 'The file upload was refused. Try again.' });
+  return target.uploadId;
+}

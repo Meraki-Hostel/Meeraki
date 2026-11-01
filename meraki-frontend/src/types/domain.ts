@@ -67,7 +67,11 @@ export interface OrganizationSettings {
   timezone: 'Asia/Kolkata';
   currency: 'INR';
   rentDueDay: number;
-  lateFeePerDay: number;
+  /** Flat late fee added once per month after the grace period; 0 = off. */
+  lateFeeFlat: number;
+  lateFeeGraceDays: number;
+  /** Charge a resident who joins mid-month only for the days they stay. */
+  prorateFirstMonth: boolean;
   notifications: {
     paymentReceived: boolean;
     newComplaint: boolean;
@@ -190,10 +194,12 @@ export interface StaffMember {
 
 /* ---------- Money ---------- */
 export type ChargeStatus = 'paid' | 'partial' | 'pending' | 'overdue';
+export type ChargeKind = 'rent' | 'deposit' | 'late_fee' | 'other';
 export interface RentCharge {
   id: ID;
   studentId: ID;
   propertyId: ID;
+  kind?: ChargeKind;
   /** Billing period, YYYY-MM. */
   period: string;
   amount: number;
