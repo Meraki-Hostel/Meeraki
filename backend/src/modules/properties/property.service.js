@@ -5,6 +5,7 @@ import { withBalance, iso, todayISO, currentPeriod } from "../../utils/money.js"
 import { ledgerRows } from "../../utils/ledger.js";
 import { logActivity } from "../../utils/sideEffects.js";
 import { assertWithinPlan } from "../settings/settings.service.js";
+import { LOGIN_STAFF_ROLES } from "../invitations/invitation.service.js";
 
 const count = (groups, id, key = "_count") => groups.find((g) => g.propertyId === id)?.[key] ?? 0;
 
@@ -79,7 +80,9 @@ export async function get(auth, id) {
 async function assertOwnStaff(auth, staffId) {
   if (!staffId) return;
   const staff = await prisma.staffMember.findUnique({ where: { id: staffId }, select: { orgId: true, role: true } });
-  if (!staff || staff.orgId !== auth.orgId) throw invalid({ managerStaffId: "Choose a manager from your own staff" });
+  if (!staff || staff.orgId !== auth.orgId || !LOGIN_STAFF_ROLES.includes(staff.role)) {
+    throw invalid({ managerStaffId: "Choose a manager from your own staff" });
+  }
 }
 
 export async function create(auth, input, actorName = "Owner") {
