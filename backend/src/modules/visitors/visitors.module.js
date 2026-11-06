@@ -6,8 +6,9 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { authenticate } from "../../middleware/authenticate.js";
 import { validate } from "../../middleware/validate.js";
 import { actorName } from "../../utils/sideEffects.js";
+import { isCalendarDate } from "../../utils/validators.js";
 
-const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use the format YYYY-MM-DD");
+const isoDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/, "Use the format YYYY-MM-DD").refine(isCalendarDate, "That date doesn't exist");
 const visit = {
   visitorName: z.string().max(120), visitorPhone: z.string(), relation: z.string().max(60),
   visitDate: isoDate, visitTime: z.string().regex(/^([01]\d|2[0-3]):[0-5]\d$/, "Use the format HH:MM"), purpose: z.string().max(500).default(""),
