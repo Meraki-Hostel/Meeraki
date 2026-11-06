@@ -194,7 +194,7 @@ export async function create(auth, input, actorName = "Staff") {
   return { ...serialize(created), invite: invite ? { inviteLink: invite.inviteLink, emailSent: invite.emailSent } : undefined };
 }
 
-export async function update(auth, id, patch) {
+export async function update(auth, id, patch, actorName = "Staff") {
   requireRole(auth, "owner", "manager");
   const s = await prisma.studentProfile.findUnique({ where: { id } });
   if (!s) throw notFound("Student");
@@ -211,12 +211,13 @@ export async function update(auth, id, patch) {
   const updated = await prisma.$transaction(async (tx) => {
     const row = await tx.studentProfile.update({ where: { id }, data });
     await syncLogin(tx, id, { email: patch.email, phone: patch.phone });
+    await logActivity(tx, auth, actorName, "student", `Resident details updated: ${row.name}`, row.propertyId, `/manager/students/${row.id}`);
     return row;
   });
   return serialize(updated);
 }
 
-export async function setStatus(auth, id, status, { force = false } = {}) {
+export async function setStatus(auth, id, status, { force = false, actorName = "Staff" } = {}) {
   requireRole(auth, "owner", "manager");
   const s = await prisma.studentProfile.findUnique({ where: { id } });
   if (!s) throw notFound("Student");
@@ -233,10 +234,12 @@ export async function setStatus(auth, id, status, { force = false } = {}) {
     if (status === "moved_out" && s.bedId) {
       await tx.bed.updateMany({ where: { id: s.bedId, studentId: id }, data: { status: "available", studentId: null } });
     }
-    return tx.studentProfile.update({
+    const row = await tx.studentProfile.update({
       where: { id },
       data: status === "moved_out" ? { status, bedId: null, roomId: null } : { status },
     });
+    await logActivity(tx, auth, actorName, "student", `Resident status changed to ${status.replace("_", " ")}: ${row.name}`, row.propertyId, `/manager/students/${row.id}`);
+    return row;
   });
   return serialize(updated);
 }
