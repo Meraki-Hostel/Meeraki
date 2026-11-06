@@ -4,6 +4,7 @@ import { assertPropertyAccess, propertyScope, requireRole } from "../../utils/sc
 import { currentPeriod } from "../../utils/money.js";
 import { assertWithinPlan } from "../settings/settings.service.js";
 import { generateRent } from "../payments/charge.service.js";
+import { logActivity, notifyStudentUsers } from "../../utils/sideEffects.js";
 
 export async function list(auth, filters = {}) {
   const where = await propertyScope(auth, filters.propertyId);
@@ -40,7 +41,7 @@ export async function list(auth, filters = {}) {
 export const BEDS_PER_TYPE = { single: 1, double: 2, triple: 3, quad: 4 };
 const LABELS = ["A", "B", "C", "D"];
 
-export async function create(auth, input) {
+export async function create(auth, input, actorName = "Staff") {
   requireRole(auth, "owner", "manager");
   const propertyId = auth.role === "owner" ? input.propertyId : auth.propertyId;
   if (!propertyId) throw invalid({ propertyId: "Property is required" });
@@ -57,11 +58,12 @@ export async function create(auth, input) {
     await tx.bed.createMany({
       data: LABELS.slice(0, BEDS_PER_TYPE[room.type]).map((label) => ({ roomId: room.id, propertyId, label })),
     });
+    await logActivity(tx, auth, actorName, "room", `Room added: ${room.number}`, propertyId, "/manager/rooms");
     return room;
   });
 }
 
-export async function update(auth, id, input) {
+export async function update(auth, id, input, actorName = "Staff") {
   requireRole(auth, "owner", "manager");
   const room = await prisma.room.findUnique({ where: { id } });
   if (!room) throw notFound("Room");
@@ -87,25 +89,31 @@ export async function update(auth, id, input) {
         await tx.bed.createMany({ data: missing.map((label) => ({ roomId: id, propertyId: room.propertyId, label })) });
       }
     }
-    return tx.room.update({ where: { id }, data });
+    const updated = await tx.room.update({ where: { id }, data });
+    await logActivity(tx, auth, actorName, "room", `Room updated: ${updated.number}`, room.propertyId, "/manager/rooms");
+    return updated;
   });
 }
 
-export async function setBedStatus(auth, bedId, status, reason) {
+export async function setBedStatus(auth, bedId, status, reason, actorName = "Staff") {
   requireRole(auth, "owner", "manager");
   const bed = await prisma.bed.findUnique({ where: { id: bedId } });
   if (!bed) throw notFound("Bed");
   await assertPropertyAccess(auth, bed.propertyId);
   if (bed.status === "occupied") throw conflict("Vacate the resident before changing this bed's status.");
-  const { count } = await prisma.bed.updateMany({
-    where: { id: bedId, studentId: null },
-    data: { status, unavailableReason: status === "unavailable" ? reason ?? null : null },
+  return prisma.$transaction(async (tx) => {
+    const { count } = await tx.bed.updateMany({
+      where: { id: bedId, studentId: null },
+      data: { status, unavailableReason: status === "unavailable" ? reason ?? null : null },
+    });
+    if (!count) throw conflict("Vacate the resident before changing this bed's status.");
+    const updated = await tx.bed.findUnique({ where: { id: bedId } });
+    await logActivity(tx, auth, actorName, "room", `Bed ${updated.label} marked ${status}`, bed.propertyId, "/manager/rooms");
+    return updated;
   });
-  if (!count) throw conflict("Vacate the resident before changing this bed's status.");
-  return prisma.bed.findUnique({ where: { id: bedId } });
 }
 
-export async function assignBed(auth, studentId, bedId) {
+export async function assignBed(auth, studentId, bedId, actorName = "Staff") {
   requireRole(auth, "owner", "manager");
   const activated = await prisma.$transaction(async (tx) => {
     const student = await tx.studentProfile.findUnique({ where: { id: studentId } });
@@ -119,6 +127,8 @@ export async function assignBed(auth, studentId, bedId) {
     if (student.status === "moved_out") throw conflict("This resident has moved out. Change their status before assigning a bed.");
     if (student.bedId === bedId) return null;
 
+    const room = await tx.room.findUnique({ where: { id: bed.roomId }, select: { number: true } });
+    const wasTransfer = Boolean(student.bedId);
     // Free the student's current bed if they have one (move/transfer).
     if (student.bedId) {
       await tx.bed.update({ where: { id: student.bedId }, data: { status: "available", studentId: null } });
@@ -133,6 +143,8 @@ export async function assignBed(auth, studentId, bedId) {
       where: { id: studentId },
       data: { bedId, roomId: bed.roomId, status: student.status === "pending" ? "active" : student.status },
     });
+    await logActivity(tx, auth, actorName, "room", `${wasTransfer ? "Transferred" : "Assigned"} ${student.name} to Room ${room.number}, Bed ${bed.label}`, student.propertyId, `/manager/students/${studentId}`);
+    await notifyStudentUsers(tx, studentId, wasTransfer ? "Room changed" : "Bed assigned", `You are now in Room ${room.number}, Bed ${bed.label}.`, "system", "/student/home");
     return student.status === "pending" ? student.propertyId : null;
   });
   // A waitlisted resident who just got a bed starts paying this month (pro-rated).
@@ -143,14 +155,18 @@ export async function assignBed(auth, studentId, bedId) {
   }
 }
 
-export async function vacateBed(auth, studentId) {
+export async function vacateBed(auth, studentId, actorName = "Staff") {
   requireRole(auth, "owner", "manager");
   await prisma.$transaction(async (tx) => {
     const student = await tx.studentProfile.findUnique({ where: { id: studentId } });
     if (!student) throw notFound("Student");
     await assertPropertyAccess(auth, student.propertyId);
     if (student.bedId) {
+      const bed = await tx.bed.findUnique({ where: { id: student.bedId }, select: { label: true, roomId: true } });
+      const room = await tx.room.findUnique({ where: { id: bed.roomId }, select: { number: true } });
       await tx.bed.update({ where: { id: student.bedId }, data: { status: "available", studentId: null } });
+      await logActivity(tx, auth, actorName, "room", `Vacated ${student.name} from Room ${room.number}, Bed ${bed.label}`, student.propertyId, `/manager/students/${studentId}`);
+      await notifyStudentUsers(tx, studentId, "Bed vacated", `Your bed (Room ${room.number}, Bed ${bed.label}) has been vacated.`, "system", "/student/home");
     }
     await tx.studentProfile.update({ where: { id: studentId }, data: { bedId: null, roomId: null } });
   });
