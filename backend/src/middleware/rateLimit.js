@@ -1,5 +1,13 @@
 import rateLimit from "express-rate-limit";
 import { verifyAccessToken } from "../utils/tokens.js";
+import { isEmail, normalizePhone } from "../utils/validators.js";
+
+// Matches findByIdentifier's own comparison, so every formatting of the same
+// phone number (or the same email, any case) lands on one rate-limit bucket.
+const normalizeIdentifier = (id) => {
+  const trimmed = String(id ?? "").trim();
+  return isEmail(trimmed) ? trimmed.toLowerCase() : normalizePhone(trimmed);
+};
 
 // Answer in the API's error envelope, so the app shows a clear message instead
 // of treating the refusal as "server unreachable".
@@ -30,7 +38,7 @@ export const authLimiter = rateLimit({
 // spraying many accounts.
 const loginPerAccount = rateLimit({
   windowMs: FIFTEEN_MIN, max: 10, standardHeaders: true, legacyHeaders: false,
-  keyGenerator: (req) => `${req.ip}|${String(req.body?.identifier ?? "").trim().toLowerCase()}`,
+  keyGenerator: (req) => `${req.ip}|${normalizeIdentifier(req.body?.identifier)}`,
   handler: tooMany("Too many sign-in attempts for this account. Try again in 15 minutes."),
 });
 const loginPerIp = rateLimit({
