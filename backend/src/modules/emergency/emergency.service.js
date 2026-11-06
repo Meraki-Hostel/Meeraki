@@ -42,8 +42,6 @@ export async function raise(auth, actorName, { type, message, location }) {
   requireRole(auth, "student");
   const s = await prisma.studentProfile.findUnique({ where: { id: auth.studentId } });
   if (!message?.trim()) throw invalid({ message: "Describe what is happening" });
-  const open = await prisma.emergencyAlert.count({ where: { studentId: s.id, status: { in: ["open", "acknowledged"] } } });
-  if (open >= MAX_OPEN) throw conflict("You already have open alerts. The office has been notified; call 112 if you are in danger.");
 
   let where = location?.trim();
   if (!where) {
@@ -55,6 +53,11 @@ export async function raise(auth, actorName, { type, message, location }) {
   }
 
   const { alert, recipients } = await prisma.$transaction(async (tx) => {
+    // Serialises concurrent alerts from the same student, so two requests racing
+    // at MAX_OPEN - 1 open alerts cannot both pass the count check.
+    await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`emergency-alert:${s.id}`}))`;
+    const open = await tx.emergencyAlert.count({ where: { studentId: s.id, status: { in: ["open", "acknowledged"] } } });
+    if (open >= MAX_OPEN) throw conflict("You already have open alerts. The office has been notified; call 112 if you are in danger.");
     const a = await tx.emergencyAlert.create({ data: { propertyId: s.propertyId, studentId: s.id, type, message: message.trim(), location: where } });
     const staff = await tx.user.findMany({
       where: {
