@@ -7,6 +7,6 @@ export const me = asyncHandler(async (req, res) => ok(res, await svc.me(req.auth
 export const nextCode = asyncHandler(async (_req, res) => ok(res, await svc.nextStudentCode()));
 export const get = asyncHandler(async (req, res) => ok(res, await svc.get(req.auth, req.params.id)));
 export const create = asyncHandler(async (req, res) => ok(res, await svc.create(req.auth, req.body, await actorName(req.auth)), 201));
-export const update = asyncHandler(async (req, res) => ok(res, await svc.update(req.auth, req.params.id, req.body)));
-export const setStatus = asyncHandler(async (req, res) => ok(res, await svc.setStatus(req.auth, req.params.id, req.body.status, { force: req.body.force })));
+export const update = asyncHandler(async (req, res) => ok(res, await svc.update(req.auth, req.params.id, req.body, await actorName(req.auth))));
+export const setStatus = asyncHandler(async (req, res) => ok(res, await svc.setStatus(req.auth, req.params.id, req.body.status, { force: req.body.force }, await actorName(req.auth))));
 export const updateSelf = asyncHandler(async (req, res) => ok(res, await svc.updateSelf(req.auth, req.body)));

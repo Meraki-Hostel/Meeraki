@@ -4,11 +4,12 @@ import { isEmail, isIndianPhone, normalizePhone } from "../../utils/validators.j
 import { requireRole, assertPropertyAccess, propertyScope } from "../../utils/scope.js";
 import { withBalance, iso, todayISO, counted, currentPeriod } from "../../utils/money.js";
 import { ledgerRows, balancesByStudent } from "../../utils/ledger.js";
-import { logActivity } from "../../utils/sideEffects.js";
+import { logActivity, notifyStudentUsers } from "../../utils/sideEffects.js";
 import { issueInvitation, deliverInvitation } from "../invitations/invitation.service.js";
 import { generateRent } from "../payments/charge.service.js";
 import { studentExtras } from "./student.extras.js";
 
+const STATUS_LABEL = { active: "active", notice: "on notice", pending: "waitlisted", moved_out: "moved out" };
 const inr = (n) => `₹${Number(n).toLocaleString("en-IN")}`;
 
 function serialize(s) {
@@ -189,7 +190,7 @@ export async function create(auth, input, actorName = "Staff") {
   return { ...serialize(created), invite: invite ? { inviteLink: invite.inviteLink, emailSent: invite.emailSent } : undefined };
 }
 
-export async function update(auth, id, patch) {
+export async function update(auth, id, patch, actorName = "Staff") {
   requireRole(auth, "owner", "manager");
   const s = await prisma.studentProfile.findUnique({ where: { id } });
   if (!s) throw notFound("Student");
@@ -206,12 +207,13 @@ export async function update(auth, id, patch) {
   const updated = await prisma.$transaction(async (tx) => {
     const row = await tx.studentProfile.update({ where: { id }, data });
     await syncLogin(tx, id, { email: patch.email, phone: patch.phone });
+    await logActivity(tx, auth, actorName, "student", `Resident details updated: ${row.name}`, s.propertyId, `/manager/students/${id}`);
     return row;
   });
   return serialize(updated);
 }
 
-export async function setStatus(auth, id, status, { force = false } = {}) {
+export async function setStatus(auth, id, status, { force = false } = {}, actorName = "Staff") {
   requireRole(auth, "owner", "manager");
   const s = await prisma.studentProfile.findUnique({ where: { id } });
   if (!s) throw notFound("Student");
@@ -228,10 +230,16 @@ export async function setStatus(auth, id, status, { force = false } = {}) {
     if (status === "moved_out" && s.bedId) {
       await tx.bed.updateMany({ where: { id: s.bedId, studentId: id }, data: { status: "available", studentId: null } });
     }
-    return tx.studentProfile.update({
+    const row = await tx.studentProfile.update({
       where: { id },
       data: status === "moved_out" ? { status, bedId: null, roomId: null } : { status },
     });
+    if (status !== s.status) {
+      const label = STATUS_LABEL[status] ?? status;
+      const forced = status === "moved_out" && force && auth.role === "owner" ? " (approved with dues outstanding)" : "";
+      await logActivity(tx, auth, actorName, "student", `${s.name} marked ${label}${forced}`, s.propertyId, `/manager/students/${id}`);
+    }
+    return row;
   });
   return serialize(updated);
 }
