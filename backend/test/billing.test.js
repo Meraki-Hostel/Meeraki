@@ -204,6 +204,9 @@ describe("Razorpay confirmation (service level)", () => {
     await prisma.refund.create({ data: { ...base, refundNo: "REF-T-2", amount: 1000, adjustCharge: true, gatewayRefundId: "rfnd_fail" } });
     assert.deepEqual(await settleWebhookRefund({ gatewayRefundId: "rfnd_fail", status: "failed" }), { settled: "failed" });
     assert.equal((await prisma.rentCharge.findUnique({ where: { id: w.chargeA.id } })).amount, 9500);
-    assert.deepEqual(await settleWebhookRefund({ gatewayRefundId: "rfnd_fail", status: "processed" }), { ignored: "refund already failed" });
+    // Razorpay's real outcome can still correct a status wrongly recorded as failed.
+    assert.deepEqual(await settleWebhookRefund({ gatewayRefundId: "rfnd_fail", status: "processed" }), { settled: "processed" });
+    assert.equal((await prisma.rentCharge.findUnique({ where: { id: w.chargeA.id } })).amount, 8500);
+    assert.deepEqual(await settleWebhookRefund({ gatewayRefundId: "rfnd_fail", status: "failed" }), { ignored: "refund already processed" });
   });
 });

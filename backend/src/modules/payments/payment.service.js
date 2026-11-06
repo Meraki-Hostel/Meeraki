@@ -468,6 +468,10 @@ export async function settleWebhookRefund({ gatewayRefundId, status }) {
     if (status === "failed") {
       if (r.adjustCharge) await tx.rentCharge.update({ where: { id: r.chargeId }, data: { amount: { increment: r.amount } } });
       await notifyStaffUsers(tx, r.propertyId, "Refund failed", `Refund ${r.refundNo} of ${inr(r.amount)} failed at Razorpay and was not paid out.`, "payment", "/manager/payments", "/owner/finance");
+    } else if (status === "processed" && r.status === "failed") {
+      // Correcting an earlier (wrong) failed status: redo the charge reduction that was undone then.
+      if (r.adjustCharge) await tx.rentCharge.update({ where: { id: r.chargeId }, data: { amount: { decrement: r.amount } } });
+      await notifyStaffUsers(tx, r.propertyId, "Refund corrected", `Refund ${r.refundNo} of ${inr(r.amount)} actually went through at Razorpay after being marked failed.`, "payment", "/manager/payments", "/owner/finance");
     }
   });
   return { settled: status };
