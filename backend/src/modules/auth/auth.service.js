@@ -218,6 +218,7 @@ export async function acceptInvitation(token, password) {
     } else if (inv.role === "staff") {
       const st = await tx.staffMember.findUnique({ where: { id: inv.staffId } });
       if (!st || st.status === "inactive") throw conflict("This staff record is no longer active. Ask your hostel admin.");
+      if (await tx.user.findFirst({ where: { staffId: st.id }, select: { id: true } })) throw conflict("This staff member already has an account. Sign in instead.");
       user = await tx.user.create({
         data: { ...base, phone: normalizePhone(st.phone), role: "manager", title: st.role === "manager" ? "Property Manager" : st.role[0].toUpperCase() + st.role.slice(1), propertyId: st.propertyId, staffId: st.id },
       });
