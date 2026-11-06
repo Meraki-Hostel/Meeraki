@@ -8,6 +8,7 @@ import { isEmail, isIndianPhone, normalizePhone } from "../../utils/validators.j
 import { passwordProblem } from "../../utils/passwordPolicy.js";
 import { sendMail, requireMail, maskEmail } from "../../services/mail.js";
 import { logActivity, notifyStaffUsers } from "../../utils/sideEffects.js";
+import { LOGIN_STAFF_ROLES } from "../invitations/invitation.service.js";
 
 // A real bcrypt hash of a random string, compared against when the account does not exist.
 const DUMMY_HASH = await hashPassword(randomUUID());
@@ -218,6 +219,7 @@ export async function acceptInvitation(token, password) {
     } else if (inv.role === "staff") {
       const st = await tx.staffMember.findUnique({ where: { id: inv.staffId } });
       if (!st || st.status === "inactive") throw conflict("This staff record is no longer active. Ask your hostel admin.");
+      if (!LOGIN_STAFF_ROLES.includes(st.role)) throw conflict("This staff member's role no longer allows an app account. Ask your hostel admin.");
       if (await tx.user.findFirst({ where: { staffId: st.id }, select: { id: true } })) throw conflict("This staff member already has an account. Sign in instead.");
       user = await tx.user.create({
         data: { ...base, phone: normalizePhone(st.phone), role: "manager", title: st.role === "manager" ? "Property Manager" : st.role[0].toUpperCase() + st.role.slice(1), propertyId: st.propertyId, staffId: st.id },
