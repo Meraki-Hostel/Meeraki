@@ -184,7 +184,12 @@ export async function create(auth, input, actorName = "Staff") {
     await logActivity(tx, auth, actorName, "student", `New resident admitted: ${s.name}${input.deposit > 0 ? ` (deposit ${inr(input.deposit)})` : ""}`, propertyId, `/manager/students/${s.id}`);
     return tx.studentProfile.findUnique({ where: { id: s.id } });
   });
-  if (created.status === "active") await generateRent({ period: currentPeriod(), orgId: auth.orgId, propertyId });
+  // The resident is already saved; a failure raising this month's rent must not be
+  // reported as a failed admission (the daily job backfills any charge missed here).
+  if (created.status === "active") {
+    try { await generateRent({ period: currentPeriod(), orgId: auth.orgId, propertyId }); }
+    catch (err) { console.error("generateRent after admission failed:", err.message); }
+  }
   const invite = invitation ? await deliverInvitation(invitation) : null;
   return { ...serialize(created), invite: invite ? { inviteLink: invite.inviteLink, emailSent: invite.emailSent } : undefined };
 }

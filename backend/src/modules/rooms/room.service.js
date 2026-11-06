@@ -136,7 +136,11 @@ export async function assignBed(auth, studentId, bedId) {
     return student.status === "pending" ? student.propertyId : null;
   });
   // A waitlisted resident who just got a bed starts paying this month (pro-rated).
-  if (activated) await generateRent({ period: currentPeriod(), orgId: auth.orgId, propertyId: activated });
+  // The bed assignment already committed; a failure here must not look like it didn't.
+  if (activated) {
+    try { await generateRent({ period: currentPeriod(), orgId: auth.orgId, propertyId: activated }); }
+    catch (err) { console.error("generateRent after bed assignment failed:", err.message); }
+  }
 }
 
 export async function vacateBed(auth, studentId) {
