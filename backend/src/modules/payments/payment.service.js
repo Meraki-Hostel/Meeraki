@@ -343,7 +343,9 @@ export async function confirmWebhookPayment({ orderId, gatewayPaymentId, amountP
   const pending = orderId ? await prisma.payment.findUnique({ where: { gatewayOrderId: orderId } }) : null;
   if (!pending) return { ignored: "unknown order" };
   if (pending.status === "captured") return { alreadyConfirmed: true };
-  if (pending.status !== "pending") return { ignored: `payment is ${pending.status}` };
+  // A payment already marked "failed" (e.g. a declined attempt) can still be the
+  // one Razorpay later reports as captured, on a retry within the same order.
+  if (!["pending", "failed"].includes(pending.status)) return { ignored: `payment is ${pending.status}` };
 
   if (currency !== "INR" || amountPaise !== Math.round(pending.amount * 100)) {
     await prisma.payment.updateMany({
@@ -360,7 +362,8 @@ export async function confirmWebhookPayment({ orderId, gatewayPaymentId, amountP
     // The charge lock serialises concurrent deliveries; re-read after taking it.
     const charge = await lockCharge(tx, pending.chargeId);
     const fresh = await tx.payment.findUnique({ where: { id: pending.id } });
-    if (fresh.status !== "pending") return { alreadyConfirmed: true };
+    if (fresh.status === "captured") return { alreadyConfirmed: true };
+    if (!["pending", "failed"].includes(fresh.status)) return { ignored: `payment is ${fresh.status}` };
     // Money was received, so it is always credited; if staff recorded a payment in
     // the meantime this overpays, which is flagged for a refund decision.
     const overpaid = pending.amount > (await balanceOf(tx, charge));
