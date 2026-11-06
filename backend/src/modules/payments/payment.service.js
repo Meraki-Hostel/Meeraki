@@ -459,7 +459,10 @@ export async function settleWebhookRefund({ gatewayRefundId, status }) {
   const r = gatewayRefundId ? await prisma.refund.findUnique({ where: { gatewayRefundId } }) : null;
   if (!r) return { ignored: "unknown refund" };
   if (r.status === status) return { alreadySettled: true };
-  if (r.status === "failed") return { ignored: "refund already failed" };
+  // "failed" is not terminal here: a timed-out refundPayment() call marks it failed
+  // locally even when Razorpay actually accepted it, and the real webhook corrects
+  // that. Only a refund already paid out is left alone.
+  if (r.status === "processed") return { ignored: "refund already processed" };
   await prisma.$transaction(async (tx) => {
     await tx.refund.update({ where: { id: r.id }, data: { status } });
     if (status === "failed") {
