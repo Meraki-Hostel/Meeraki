@@ -69,7 +69,17 @@ function DocRow({ d }: { d: DocumentRecord }) {
   const [err, setErr] = useState<string>();
   const up = useMutation((file: File) => services.documents.upload(d.id, file), { success: 'Uploaded. The office will review it soon.', toastErrors: false });
   const rm = useMutation(() => services.documents.remove(d.id), { success: 'File removed.' });
-  const view = useMutation(async () => { window.open(await services.documents.fileUrl(d.id), '_blank', 'noopener'); });
+  const view = useMutation(async () => {
+    // Open the tab synchronously so pop-up blockers allow it, then point it at the file.
+    const tab = window.open('', '_blank');
+    try {
+      const url = await services.documents.fileUrl(d.id);
+      if (tab) tab.location.href = url; else window.location.href = url;
+    } catch (e) {
+      tab?.close();
+      throw e;
+    }
+  });
   const canUpload = d.status === 'missing' || d.status === 'rejected';
   return (
     <li className="py-4">
