@@ -91,7 +91,7 @@ export function AgreementModal({ open, onClose, student, onDownload }: { open: b
           <li>Monthly rent of <b>{formatINR(student.monthlyRent)}</b> is payable on or before the {data.settings.rentDueDay}th of each month. A late fee of {formatINR(data.settings.lateFeePerDay)} per day applies after the due date.</li>
           <li>A refundable security deposit of <b>{formatINR(student.deposit)}</b> is held and returned within 15 days of checkout, less any damages.</li>
           <li>Visitors are allowed between 9 AM and 8 PM and must be registered at the reception.</li>
-          <li>Leave or night-outs require prior approval from the warden through the Meraki app.</li>
+          <li>Leave or night-outs require prior approval from the warden through the StayPookie app.</li>
           <li>Either party may terminate this agreement with 30 days’ written notice.</li>
         </ol>
         <div className="grid grid-cols-2 gap-6 pt-4 text-xs text-slate-500">

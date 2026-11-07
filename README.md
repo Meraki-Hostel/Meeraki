@@ -1,10 +1,10 @@
-# Meraki — Hostel Management
+# StayPookie — Hostel Management
 
 Monorepo with three independently deployable apps:
 
 | Folder | What | Stack | Deploy |
 | --- | --- | --- | --- |
-| [`meraki-frontend/`](meraki-frontend) | The real web app (Owner, Manager/Warden, Student) | React + Vite + TypeScript | Static site (Netlify/Vercel), base directory `meraki-frontend` |
+| [`staypookie-frontend/`](staypookie-frontend) | The real web app (Owner, Manager/Warden, Student) | React + Vite + TypeScript | Static site (Netlify/Vercel), base directory `staypookie-frontend` |
 | [`backend/`](backend) | REST API for web and mobile | Node + Express + Prisma + PostgreSQL | Node host (Render/Railway/Fly), root directory `backend` |
 | [`prototype/`](prototype) | Original clickable prototype, kept for demos | React + Vite, mock data only | Static site, base directory `prototype` |
 
@@ -22,7 +22,7 @@ npm run db:seed
 npm run dev                 # http://localhost:4000/health
 
 # 2. Frontend (new terminal)
-cd meraki-frontend
+cd staypookie-frontend
 npm install
 cp .env.example .env        # VITE_API_BASE_URL=http://localhost:4000/api/v1
 npm run dev                 # http://localhost:5173

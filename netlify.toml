@@ -1,6 +1,6 @@
 # Used only by a Netlify site whose Base directory is the repo root (the
 # existing prototype site). It keeps deploying the prototype from prototype/.
-# Sites with their own Base directory (meraki-frontend, prototype) use the
+# Sites with their own Base directory (staypookie-frontend, prototype) use the
 # netlify.toml in that folder instead.
 [build]
   base = "prototype"

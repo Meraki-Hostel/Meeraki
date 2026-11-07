@@ -1,4 +1,4 @@
-// Meraki schema — field names, enum values and relationships mirror the
+// StayPookie schema — field names, enum values and relationships mirror the
 // frontend's src/types/domain.ts so API JSON maps 1:1 to the frontend types.
 // Enum member names ARE the exact string values the frontend sends/expects.
 

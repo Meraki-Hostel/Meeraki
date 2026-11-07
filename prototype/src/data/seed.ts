@@ -712,7 +712,7 @@ export function createSeedData(): AppData {
     properties, rooms, beds, students, dues, transactions, complaints, leaves, visitors, staff, requirements,
     maintenance, inventory, announcements, events, feedback, expenses, activity, alerts: [], studentNotifications,
     documents: [{ id: 'doc1', studentId: 's-rahul', name: 'College ID card.pdf', kind: 'ID Proof', size: '412 KB', uploadedAt: '2025-07-15T10:30:00.000Z' }],
-    settings: { orgName: 'Meraki Hostels Pvt. Ltd.', gstin: '23AAKCM4821Q1Z5', lateFeePerDay: 50, rentDueDay: 5, notifyOverdue: true, notifyEmergency: true, notifyWeeklyDigest: false },
+    settings: { orgName: 'StayPookie Hostels Pvt. Ltd.', gstin: '23AAKCM4821Q1Z5', lateFeePerDay: 50, rentDueDay: 5, notifyOverdue: true, notifyEmergency: true, notifyWeeklyDigest: false },
     counters: { receipt, complaint: cNum },
   }
 }

@@ -4,7 +4,7 @@ import { prisma } from "./config/prisma.js";
 
 const app = createApp();
 const server = app.listen(env.port, () => {
-  console.log(`Meraki API on http://localhost:${env.port} (${env.nodeEnv}) · payments: ${env.payments.mode}`);
+  console.log(`StayPookie API on http://localhost:${env.port} (${env.nodeEnv}) · payments: ${env.payments.mode}`);
 });
 async function shutdown(sig) {
   console.log(`\n${sig} received, shutting down...`);

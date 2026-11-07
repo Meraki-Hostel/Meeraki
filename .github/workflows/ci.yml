@@ -26,21 +26,21 @@ jobs:
       postgres:
         image: postgres:16-alpine
         env:
-          POSTGRES_USER: meraki
-          POSTGRES_PASSWORD: meraki
-          POSTGRES_DB: meraki_test
+          POSTGRES_USER: staypookie
+          POSTGRES_PASSWORD: staypookie
+          POSTGRES_DB: staypookie_test
         ports:
           - 5432:5432
         options: >-
-          --health-cmd "pg_isready -U meraki -d meraki_test"
+          --health-cmd "pg_isready -U staypookie -d staypookie_test"
           --health-interval 5s
           --health-timeout 5s
           --health-retries 12
     env:
       # Throwaway database inside the CI runner. Never a real/shared database.
-      TEST_DATABASE_URL: postgresql://meraki:meraki@localhost:5432/meraki_test
-      DATABASE_URL: postgresql://meraki:meraki@localhost:5432/meraki_test
-      DIRECT_URL: postgresql://meraki:meraki@localhost:5432/meraki_test
+      TEST_DATABASE_URL: postgresql://staypookie:staypookie@localhost:5432/staypookie_test
+      DATABASE_URL: postgresql://staypookie:staypookie@localhost:5432/staypookie_test
+      DIRECT_URL: postgresql://staypookie:staypookie@localhost:5432/staypookie_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
@@ -63,14 +63,14 @@ jobs:
     timeout-minutes: 15
     defaults:
       run:
-        working-directory: meraki-frontend
+        working-directory: staypookie-frontend
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
           node-version: 22
           cache: npm
-          cache-dependency-path: meraki-frontend/package-lock.json
+          cache-dependency-path: staypookie-frontend/package-lock.json
       - name: Install
         run: npm ci
       - name: Lint

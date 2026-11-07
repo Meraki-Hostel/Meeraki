@@ -1,4 +1,4 @@
-# Meraki API — backend for the Meraki frontend
+# StayPookie API — backend for the StayPookie frontend
 
 Node.js + Express + Prisma + PostgreSQL (Neon). Built to match your frontend's
 service contract exactly: the API's JSON field names, role names (`owner` /
@@ -45,8 +45,8 @@ cp .env.example .env     # then fill in the values below
 
 1. **Database**: either Neon (neon.tech; copy the **pooled** URL into
    `DATABASE_URL` and the **direct** URL into `DIRECT_URL`), or a local Postgres
-   (`createdb meraki_dev`, then put
-   `postgresql://<you>@localhost:5432/meraki_dev` in both).
+   (`createdb staypookie_dev`, then put
+   `postgresql://<you>@localhost:5432/staypookie_dev` in both).
 2. **JWT secrets**: `node -e "console.log(require('crypto').randomBytes(48).toString('hex'))"` — put two different values in `JWT_ACCESS_SECRET` and `JWT_REFRESH_SECRET`.
 3. **Migrate + seed** (migrations are committed in `prisma/migrations/`):
    ```bash
@@ -108,7 +108,7 @@ POST   /api/v1/payments/reminders              payments.sendReminders
 
 ## Frontend integration
 
-The HTTP adapters live in `../meraki-frontend/src/services/http/` and are
+The HTTP adapters live in `../staypookie-frontend/src/services/http/` and are
 switched on by `VITE_API_BASE_URL` (see the frontend README). Auth, properties,
 rooms/beds, students, payments, notifications and activity use this API.
 

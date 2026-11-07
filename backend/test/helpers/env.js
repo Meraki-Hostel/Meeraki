@@ -4,7 +4,7 @@
 // leak into a test run (dotenv does not override variables that are already
 // set), and it refuses to run against anything but a local *_test database.
 
-const DEFAULT_URL = "postgresql://meraki:meraki@127.0.0.1:55432/meraki_test";
+const DEFAULT_URL = "postgresql://staypookie:staypookie@127.0.0.1:55432/staypookie_test";
 
 export function assertDisposableDb(raw) {
   let u;

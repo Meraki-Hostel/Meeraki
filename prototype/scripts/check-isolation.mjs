@@ -25,7 +25,7 @@ for (const file of walk(join(root, 'src')).filter((f) => /\.(ts|tsx)$/.test(f)))
   const src = readFileSync(file, 'utf8');
   if (NETWORK.test(src)) problems.push(`${rel} uses a network API or env-based config`);
   for (const m of src.matchAll(/from\s+['"]([^'"]+)['"]/g)) {
-    if (/meraki-frontend|backend|\.\.\/\.\.\/\.\./.test(m[1])) problems.push(`${rel} imports from outside the prototype (${m[1]})`);
+    if (/staypookie-frontend|backend|\.\.\/\.\.\/\.\./.test(m[1])) problems.push(`${rel} imports from outside the prototype (${m[1]})`);
   }
 }
 

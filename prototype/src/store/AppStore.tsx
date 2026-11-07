@@ -8,8 +8,8 @@ import type {
 import { DEMO_TODAY, cycleLabel, formatINR, nowIso, uid } from '../lib/utils'
 import { CURRENT_CYCLE, locationOf } from './selectors'
 
-const DATA_KEY = 'meraki.prototype.data'
-const SESSION_KEY = 'meraki.prototype.session'
+const DATA_KEY = 'staypookie.prototype.data'
+const SESSION_KEY = 'staypookie.prototype.session'
 export const OWNER_NAME = 'Pawan Kushwah'
 
 type Result<T = object> = ({ ok: true } & T) | { ok: false; error: string }

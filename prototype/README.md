@@ -1,10 +1,10 @@
-# Meraki — Hostel Management Prototype
+# StayPookie — Hostel Management Prototype
 
 A frontend-only, high-fidelity prototype for validating the product scope with students, wardens/managers and owners. There is **no backend**: all data is seeded mock data held in React state and persisted to `localStorage`.
 
-> Kept for product demos and scope validation. The production app is in [`../meraki-frontend`](../meraki-frontend) and [`../backend`](../backend).
+> Kept for product demos and scope validation. The production app is in [`../staypookie-frontend`](../staypookie-frontend) and [`../backend`](../backend).
 
-**Demo only, fully isolated.** Every person, hostel, payment and message here is fictional. The prototype never calls the Meraki API, never sends anything, and never touches a real database. The real app shares no code with it.
+**Demo only, fully isolated.** Every person, hostel, payment and message here is fictional. The prototype never calls the StayPookie API, never sends anything, and never touches a real database. The real app shares no code with it.
 
 ```bash
 cd prototype
