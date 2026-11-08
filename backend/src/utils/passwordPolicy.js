@@ -3,7 +3,7 @@
 const COMMON = new Set([
   "password", "password1", "password123", "passw0rd", "12345678", "123456789", "1234567890", "qwerty123",
   "qwertyuiop", "iloveyou1", "admin123", "welcome1", "welcome123", "letmein1", "abc12345", "meraki@123",
-  "meraki123", "hostel123", "india@123", "changeme1", "11111111", "00000000", "asdf1234", "zxcvbnm1",
+  "staypookie123", "hostel123", "india@123", "changeme1", "11111111", "00000000", "asdf1234", "zxcvbnm1",
 ]);
 
 /** Returns an error message, or null when the password is acceptable. */

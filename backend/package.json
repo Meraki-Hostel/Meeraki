@@ -1,7 +1,7 @@
 {
-  "name": "meraki-api",
+  "name": "staypookie-api",
   "version": "0.1.0",
-  "description": "Meraki hostel-management REST API (Node + Express + Prisma + Neon). Matches the Meraki frontend service contract. One API for web and mobile.",
+  "description": "StayPookie hostel-management REST API (Node + Express + Prisma + Neon). Matches the StayPookie frontend service contract. One API for web and mobile.",
   "type": "module",
   "main": "src/server.js",
   "scripts": {

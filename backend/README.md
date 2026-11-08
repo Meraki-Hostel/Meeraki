@@ -1,11 +1,11 @@
-# Meraki API
+# StayPookie API
 
-REST API for the Meraki hostel-management app (Owner, Manager/Warden, Student).
+REST API for the StayPookie hostel-management app (Owner, Manager/Warden, Student).
 Node.js + Express + Prisma + PostgreSQL (Neon in production). One API serves web
 and mobile: auth is JWT bearer tokens (access + refresh), not cookies.
 
 JSON field names, role names (`owner` / `manager` / `student`), enum values and
-error codes match `meraki-frontend/src/types/domain.ts` and
+error codes match `staypookie-frontend/src/types/domain.ts` and
 `src/services/interfaces.ts` exactly.
 
 ## What's in it
@@ -100,7 +100,7 @@ returned to the admin who created them so they can be shared another way.
 
 ### Cloudflare R2 (file storage)
 
-1. Cloudflare dashboard → R2 → create a bucket (e.g. `meraki-files`). Keep it
+1. Cloudflare dashboard → R2 → create a bucket (e.g. `staypookie-files`). Keep it
    **private**; don't enable the public `r2.dev` URL.
 2. R2 → Manage API tokens → create a token with Object Read & Write on that
    bucket. Set `R2_ACCESS_KEY_ID`, `R2_SECRET_ACCESS_KEY`, `R2_ACCOUNT_ID`,

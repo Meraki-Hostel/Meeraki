@@ -39,7 +39,7 @@ export const env = {
   //   resend   = sent through Resend (https://resend.com)
   mail: {
     mode: process.env.MAIL_MODE || devDefault("console"),
-    from: process.env.MAIL_FROM || "Meraki <no-reply@meraki.local>",
+    from: process.env.MAIL_FROM || "StayPookie <no-reply@staypookie.local>",
     resendApiKey: process.env.RESEND_API_KEY || "",
   },
   // File storage for student documents and complaint photos.

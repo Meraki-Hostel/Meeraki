@@ -1,6 +1,6 @@
 # Backend Handoff
 
-A working reference for anyone integrating with the Meraki API or picking up
+A working reference for anyone integrating with the StayPookie API or picking up
 backend work for the first time. For setup, environment variables, Razorpay/R2/
 Resend configuration, scheduled jobs and deployment, see `backend/README.md` —
 this document does not repeat that, it's the contract: what's callable, what it
@@ -14,9 +14,9 @@ web and mobile. Auth is JWT bearer tokens (access + refresh), not cookies.
 Request/response field names, role names, enum values and error codes are
 defined once and shared exactly between the backend and the frontend:
 
-- `meraki-frontend/src/types/domain.ts` — domain types and enums (`Role`,
+- `staypookie-frontend/src/types/domain.ts` — domain types and enums (`Role`,
   `StudentStatus`, `ComplaintStatus`, etc.)
-- `meraki-frontend/src/services/interfaces.ts` — the exact request/response
+- `staypookie-frontend/src/services/interfaces.ts` — the exact request/response
   shape of every service method (`IStudentService`, `IPaymentService`, …)
 
 If you need the precise shape of a request body or a response, those two files
@@ -120,7 +120,7 @@ Health        GET /health (liveness) · GET /ready (database reachable)
 For the exact request/response TypeScript shape behind any of these, look up
 the matching service interface in `interfaces.ts` (e.g. `/students` ↔
 `IStudentService`, `/payments/*` ↔ `IPaymentService`). Every HTTP adapter in
-`meraki-frontend/src/services/http/` implements one of these interfaces 1:1.
+`staypookie-frontend/src/services/http/` implements one of these interfaces 1:1.
 
 ## Database safety
 
@@ -138,8 +138,8 @@ What to use instead:
 
 | Situation | Command | Database |
 | --- | --- | --- |
-| Local development | `npm run prisma:deploy`, `npm run db:seed` | Local Postgres via `docker compose up -d db` (`docker-compose.yml`, port 5433, `meraki_dev`) |
-| Running the test suite | `npm run test:db:up` / `npm test` / `npm run test:db:down` | A disposable container the script creates itself (port 55432, `meraki_test`); tests refuse to run against any database whose name doesn't end in `_test` |
+| Local development | `npm run prisma:deploy`, `npm run db:seed` | Local Postgres via `docker compose up -d db` (`docker-compose.yml`, port 5433, `staypookie_dev`) |
+| Running the test suite | `npm run test:db:up` / `npm test` / `npm run test:db:down` | A disposable container the script creates itself (port 55432, `staypookie_test`); tests refuse to run against any database whose name doesn't end in `_test` |
 | Staging/production deploy | `npm run build` (runs `prisma migrate deploy`) | Neon, via `DATABASE_URL`/`DIRECT_URL` — applies only the committed migrations, never resets anything |
 | First production owner account | `npm run db:seed:prod` | Neon — the only seed script meant to touch it |
 
@@ -159,7 +159,7 @@ deploy applies that migration automatically via `prisma migrate deploy`.
 
 - `backend/README.md` — environment variables, running locally, Razorpay/R2/
   Resend setup, scheduled jobs, deploying.
-- `meraki-frontend/src/services/interfaces.ts` — exact request/response types.
-- `meraki-frontend/src/types/domain.ts` — shared enums and domain types.
+- `staypookie-frontend/src/services/interfaces.ts` — exact request/response types.
+- `staypookie-frontend/src/types/domain.ts` — shared enums and domain types.
 - `backend/src/modules/<name>/` — one module per folder: `*.service.js` (rules
   and authorization), routes, controller, validation.
