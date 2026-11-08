@@ -3,7 +3,7 @@ import { prisma } from "../../config/prisma.js";
 const LIMIT = 5;
 const like = (q) => ({ contains: q, mode: "insensitive" });
 
-// Navigation pages per role (mirrors meraki-frontend/src/components/layout/nav.ts).
+// Navigation pages per role (mirrors staypookie-frontend/src/components/layout/nav.ts).
 const PAGES = {
   owner: [["Dashboard", "/owner/dashboard"], ["Properties", "/owner/properties"], ["Analytics", "/owner/analytics"], ["Finance", "/owner/finance"],
     ["Staff", "/owner/staff"], ["Complaints", "/owner/complaints"], ["Events", "/owner/events"], ["Inventory", "/owner/inventory"],

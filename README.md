@@ -1,10 +1,10 @@
-# Meraki — Hostel Management
+# StayPookie — Hostel Management
 
 Monorepo with three independently deployable apps:
 
 | Folder | What | Stack | Deploy |
 | --- | --- | --- | --- |
-| [`meraki-frontend/`](meraki-frontend) | The real web app (Owner, Manager/Warden, Student) | React + Vite + TypeScript | Static site (Netlify/Vercel), base directory `meraki-frontend` |
+| [`staypookie-frontend/`](staypookie-frontend) | The real web app (Owner, Manager/Warden, Student) | React + Vite + TypeScript | Static site (Netlify/Vercel), base directory `staypookie-frontend` |
 | [`backend/`](backend) | REST API for web and mobile | Node + Express + Prisma + PostgreSQL | Node host (Render/Railway/Fly), root directory `backend` |
 | [`prototype/`](prototype) | Original clickable prototype, kept for demos | React + Vite, mock data only | Static site, base directory `prototype` |
 
@@ -23,14 +23,14 @@ cd backend
 npm install
 npx prisma generate
 cp .env.example .env        # then set DATABASE_URL / DIRECT_URL to
-                            # postgresql://meraki:meraki_local_dev@127.0.0.1:5433/meraki_dev
+                            # postgresql://staypookie:staypookie_local_dev@127.0.0.1:5433/staypookie_dev
                             # and two random JWT secrets
 npm run prisma:deploy       # create the tables
 npm run db:seed             # demo data for every screen (first time only)
 npm run dev                 # http://localhost:4000/ready
 
 # 3. Frontend (new terminal)
-cd meraki-frontend
+cd staypookie-frontend
 npm install
 echo VITE_API_BASE_URL=http://localhost:4000/api/v1 > .env.local
 npm run dev                 # http://localhost:5173

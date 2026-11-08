@@ -51,8 +51,8 @@ export async function deliverInvitation({ row, raw }) {
       const org = await prisma.organization.findUnique({ where: { id: row.orgId }, select: { name: true } });
       await sendMail({
         to: row.email,
-        subject: `${row.invitedBy} invited you to ${org?.name ?? "Meraki"}`,
-        text: `Hi ${row.name},\n\n${row.invitedBy} has invited you to Meraki. Open this link to choose your password and activate your account (valid for 7 days):\n\n${inviteLink}\n\nIf you weren't expecting this, you can ignore this email.`,
+        subject: `${row.invitedBy} invited you to ${org?.name ?? "StayPookie"}`,
+        text: `Hi ${row.name},\n\n${row.invitedBy} has invited you to StayPookie. Open this link to choose your password and activate your account (valid for 7 days):\n\n${inviteLink}\n\nIf you weren't expecting this, you can ignore this email.`,
       });
       // Console mode only prints the email in the server log: nobody received it,
       // so the app should hand the link to the admin instead.

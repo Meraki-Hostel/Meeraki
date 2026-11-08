@@ -1,4 +1,4 @@
-# Meraki — Product Specification
+# StayPookie — Product Specification
 
 > **About this document.** The original `spec.md` is not present anywhere in
 > this repository's history, but several GitHub issues quote specific parts of
@@ -12,9 +12,9 @@
 > product as it actually is (a real backend + frontend), not the mock-only
 > prototype the original spec was written against (see §1).
 
-## 1. What Meraki is
+## 1. What StayPookie is
 
-Meraki is hostel-management software for Indian student hostels (PGs), used
+StayPookie is hostel-management software for Indian student hostels (PGs), used
 by three kinds of people:
 
 - **Owner** — runs one or more properties (hostels) under one organization.
@@ -25,13 +25,13 @@ by three kinds of people:
 The product was first validated as a frontend-only, mock-data prototype (see
 `prototype/`) before any backend existed. That prototype is kept only for
 product demos and scope validation; the current product is the real backend
-(`backend/`) and frontend (`meraki-frontend/`) described in this document and
+(`backend/`) and frontend (`staypookie-frontend/`) described in this document and
 in `BACKEND_HANDOFF.md`.
 
 ## 2. Roles & access
 
 Three account roles: `owner`, `manager`, `student` (see `Role` in
-`meraki-frontend/src/types/domain.ts`).
+`staypookie-frontend/src/types/domain.ts`).
 
 - An **owner** sees every property in their organization.
 - A **manager** sees only their own property.

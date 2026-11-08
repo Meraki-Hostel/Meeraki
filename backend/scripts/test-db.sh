@@ -6,9 +6,9 @@
 #   npm run test:db:down   remove the container
 set -eu
 
-NAME=meraki-test-pg
+NAME=staypookie-test-pg
 PORT=${TEST_DB_PORT:-55432}
-URL="postgresql://meraki:meraki@127.0.0.1:${PORT}/meraki_test"
+URL="postgresql://staypookie:staypookie@127.0.0.1:${PORT}/staypookie_test"
 cd "$(dirname "$0")/.."
 
 case "${1:-}" in
@@ -17,13 +17,13 @@ case "${1:-}" in
       echo "Container $NAME already exists; run 'npm run test:db:down' first to start clean." >&2
     else
       docker run -d --name "$NAME" \
-        -e POSTGRES_USER=meraki -e POSTGRES_PASSWORD=meraki -e POSTGRES_DB=meraki_test \
+        -e POSTGRES_USER=staypookie -e POSTGRES_PASSWORD=staypookie -e POSTGRES_DB=staypookie_test \
         -p "127.0.0.1:${PORT}:5432" --tmpfs /var/lib/postgresql/data \
         postgres:16-alpine >/dev/null
     fi
     printf 'Waiting for PostgreSQL'
     i=0
-    until docker exec "$NAME" pg_isready -U meraki -d meraki_test -h 127.0.0.1 >/dev/null 2>&1; do
+    until docker exec "$NAME" pg_isready -U staypookie -d staypookie_test -h 127.0.0.1 >/dev/null 2>&1; do
       i=$((i + 1)); [ "$i" -gt 60 ] && { echo " timed out" >&2; exit 1; }
       printf '.'; sleep 1
     done

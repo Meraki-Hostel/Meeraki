@@ -94,7 +94,7 @@ function Logo() {
         <svg viewBox="0 0 32 32" className="size-5" fill="currentColor"><path d="M6 24V12.5l10-5.5 10 5.5V24h-6.5v-7h-7v7z" /></svg>
       </div>
       <div className="leading-tight">
-        <div className="text-[17px] font-semibold tracking-tight text-slate-900">Meraki</div>
+        <div className="text-[17px] font-semibold tracking-tight text-slate-900">StayPookie</div>
         <div className="text-[11px] text-slate-400">Hostel OS</div>
       </div>
     </div>
@@ -168,7 +168,7 @@ function SidebarContent({ role }: { role: Role }) {
         <QuickActionCard role={role} />
       </nav>
       <div className="space-y-0.5 border-t border-slate-100 px-4 py-3">
-        <button onClick={() => toast.info('Help Center', { description: 'Reach the Meraki team at support@meraki.app — this is a prototype, so no ticket is created.' })} className={cn(navItemCls, 'w-full text-slate-500 hover:bg-slate-50 hover:text-slate-900')}>
+        <button onClick={() => toast.info('Help Center', { description: 'Reach the StayPookie team at support@staypookie.app — this is a prototype, so no ticket is created.' })} className={cn(navItemCls, 'w-full text-slate-500 hover:bg-slate-50 hover:text-slate-900')}>
           <CircleHelp size={19} strokeWidth={1.7} className="text-slate-400" />
           Help Center
         </button>
@@ -205,7 +205,7 @@ function QuickActionCard({ role }: { role: Role }) {
     role === 'manager'
       ? { title: 'Quick add new students', cta: 'Add Student', icon: Plus, onClick: () => modals.open({ type: 'addStudent' }) }
       : role === 'owner'
-        ? { title: 'Grow your portfolio with Meraki Pro', cta: 'View plans', icon: Gem, onClick: () => navigate('/owner/plans') }
+        ? { title: 'Grow your portfolio with StayPookie Pro', cta: 'View plans', icon: Gem, onClick: () => navigate('/owner/plans') }
         : { title: 'Something not working in your room?', cta: 'Raise complaint', icon: Plus, onClick: () => student && modals.open({ type: 'complaint', studentId: student.id, studentMode: true }) }
   return (
     <div className="mt-6 rounded-3xl border border-slate-100 bg-gradient-to-b from-slate-50 to-white px-4 pt-5 pb-4 text-center">

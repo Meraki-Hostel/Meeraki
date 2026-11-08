@@ -79,7 +79,7 @@ export async function raise(auth, actorName, { type, message, location }) {
       sendMail({
         to: u.email,
         subject: `EMERGENCY at your hostel: ${TYPE_LABEL[type]} – ${s.name}`,
-        text: `${s.name} raised an emergency alert.\n\nType: ${TYPE_LABEL[type]}\nWhere: ${where}\nMessage: ${message.trim()}\nPhone: ${s.phone}\n\nOpen Meraki to acknowledge it.`,
+        text: `${s.name} raised an emergency alert.\n\nType: ${TYPE_LABEL[type]}\nWhere: ${where}\nMessage: ${message.trim()}\nPhone: ${s.phone}\n\nOpen StayPookie to acknowledge it.`,
       }).catch((err) => console.error("Emergency email failed:", err.message));
     }
   }

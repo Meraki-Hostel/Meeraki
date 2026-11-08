@@ -131,7 +131,7 @@ export async function requestPasswordReset(identifier) {
   const link = `${env.appUrl}/reset-password?token=${encodeURIComponent(raw)}`;
   await sendMail({
     to: user.email,
-    subject: "Reset your Meraki password",
+    subject: "Reset your StayPookie password",
     text: `Hi ${user.name},\n\nUse this link to choose a new password. It works once and expires in 30 minutes:\n\n${link}\n\nIf you didn't ask for this, ignore this email; your password stays the same.`,
   });
   return { maskedDestination };
@@ -232,7 +232,7 @@ export async function acceptInvitation(token, password) {
     }
     const auth = { userId: user.id, role: user.role, orgId: user.orgId };
     await logActivity(tx, auth, user.name, inv.role === "student" ? "student" : "staff", `${user.name} accepted their invitation and activated their account`, user.propertyId ?? null, null);
-    if (user.propertyId) await notifyStaffUsers(tx, user.propertyId, "Account activated", `${user.name} activated their Meraki account.`, "system", null);
+    if (user.propertyId) await notifyStaffUsers(tx, user.propertyId, "Account activated", `${user.name} activated their StayPookie account.`, "system", null);
   });
 }
 
