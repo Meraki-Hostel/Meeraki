@@ -202,7 +202,7 @@ writing (verified against the code, not assumed):
 | --- | --- |
 | Accounts, invitations, password reset | Done |
 | Properties, rooms, beds | Done |
-| Residents (admission, profile, status, duplicate-phone rule in progress — see open PR) | Done |
+| Residents (admission, profile, status, one mobile number per resident) | Done |
 | Billing, payments, Razorpay checkout, refunds | Done |
 | Staff | Done |
 | Complaints, leave, visitors | Done |
@@ -219,7 +219,8 @@ writing (verified against the code, not assumed):
 included yet"): two-step sign-in (OTP) enforcement, SMS notifications, billing
 hostel owners for their plan, and GST tax invoices.
 
-Since essentially every module is already built, the open question for
-whoever owns product scope is no longer "what's MVP" but "what's left before
-the real backend (currently on its own branch) replaces the mock-data
-prototype in `main`" — see the repository's open pull requests for that.
+Every module above is merged to `main` and deployable. The open question for
+whoever owns product scope is no longer "what's MVP" but "what's next" — see
+`docs/03-roadmap.md` for the four planned features beyond this scope
+(postpaid rent, printable biodata, automated backup, hostel landing pages)
+and `docs/09-launch-checklist.md` for what's left before go-live.
