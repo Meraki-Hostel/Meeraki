@@ -206,7 +206,10 @@ describe("mobile numbers are unique per organization (#22)", () => {
     const other = await (await as(x.users.ownerX)).post("/students", newStudent({ phone: w.residentA.phone, propertyId: x.X.id, studentCode: "ADM-X" }));
     assert.equal(other.status, 201, JSON.stringify(other.body));
 
-    await (await as(w.users.managerA)).patch(`/students/${w.residentA.id}/status`, { status: "moved_out" });
+    // residentA has an unpaid charge (seedWorld); only an owner can force a
+    // move-out with dues outstanding.
+    const moveOut = await (await as(w.users.owner)).patch(`/students/${w.residentA.id}/status`, { status: "moved_out", force: true });
+    assert.equal(moveOut.status, 200, JSON.stringify(moveOut.body));
     const again = await (await as(w.users.managerA)).post("/students", newStudent({ phone: w.residentA.phone }));
     assert.equal(again.status, 201, JSON.stringify(again.body));
   });

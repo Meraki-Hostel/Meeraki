@@ -437,34 +437,73 @@ export async function refund(auth, actorName, paymentId, { amount, reason, adjus
   });
 
   if (!viaGateway) return refundView(row);
-  // Money only moves at the gateway once our record exists; a refusal is recorded as failed.
+  // Money only moves at the gateway once our record exists.
   try {
     const gw = await refundPayment(p.gatewayPaymentId, amount, { refundNo: row.refundNo, reason: reason.trim().slice(0, 200) });
-    const updated = await prisma.refund.update({
-      where: { id: row.id },
-      data: { gatewayRefundId: gw.id, status: gw.status === "processed" ? "processed" : gw.status === "failed" ? "failed" : "pending" },
+    const resolvedStatus = gw.status === "processed" ? "processed" : gw.status === "failed" ? "failed" : "pending";
+    const updated = await prisma.$transaction(async (tx) => {
+      const u = await tx.refund.update({ where: { id: row.id }, data: { gatewayRefundId: gw.id, status: resolvedStatus } });
+      // Razorpay answered synchronously that it was never going to pay out: undo
+      // the charge reduction now, same as the thrown-rejection path below.
+      if (resolvedStatus === "failed" && adjustCharge) {
+        await tx.rentCharge.update({ where: { id: p.chargeId }, data: { amount: { increment: amount } } });
+      }
+      return u;
     });
     return refundView(updated);
   } catch (err) {
-    await prisma.$transaction(async (tx) => {
-      await tx.refund.update({ where: { id: row.id }, data: { status: "failed" } });
-      if (adjustCharge) await tx.rentCharge.update({ where: { id: p.chargeId }, data: { amount: { increment: amount } } });
-    });
-    throw conflict(`Razorpay refused the refund${err.gatewayDescription ? `: ${err.gatewayDescription}` : ""}. Nothing was refunded.`);
+    // call() only throws this way when Razorpay actually answered and refused the
+    // refund (a 4xx/5xx HTTP response) — a confirmed, terminal rejection.
+    const gatewayRefused = err instanceof Error && err.message?.startsWith("Razorpay ");
+    if (gatewayRefused) {
+      await prisma.$transaction(async (tx) => {
+        await tx.refund.update({ where: { id: row.id }, data: { status: "failed" } });
+        if (adjustCharge) await tx.rentCharge.update({ where: { id: p.chargeId }, data: { amount: { increment: amount } } });
+      });
+      throw conflict(`Razorpay refused the refund${err.gatewayDescription ? `: ${err.gatewayDescription}` : ""}. Nothing was refunded.`);
+    }
+    // Anything else (timeout, network error) means we never got Razorpay's answer —
+    // the refund may still have gone through on their side. Leave it "pending"
+    // (NOT "failed"): a "failed" refund drops out of the refunded total and would
+    // let the amount be refunded a second time for real. The refund.processed /
+    // refund.failed webhook settles it once Razorpay's own word is known, matched
+    // by refundNo since we have no gatewayRefundId yet.
+    throw conflict("Could not reach Razorpay to confirm this refund. It is on hold, not failed — check back shortly instead of retrying.");
   }
 }
 
-/** Razorpay webhook: refund.processed / refund.failed. Idempotent. */
-export async function settleWebhookRefund({ gatewayRefundId, status }) {
-  const r = gatewayRefundId ? await prisma.refund.findUnique({ where: { gatewayRefundId } }) : null;
-  if (!r) return { ignored: "unknown refund" };
-  if (r.status === status) return { alreadySettled: true };
-  // "failed" is not terminal here: a timed-out refundPayment() call marks it failed
-  // locally even when Razorpay actually accepted it, and the real webhook corrects
-  // that. Only a refund already paid out is left alone.
-  if (r.status === "processed") return { ignored: "refund already processed" };
-  await prisma.$transaction(async (tx) => {
-    await tx.refund.update({ where: { id: r.id }, data: { status } });
+/**
+ * Razorpay webhook: refund.processed / refund.failed. Idempotent against a
+ * replayed or concurrently-delivered event for the same refund.
+ *
+ * `gatewayRefundId` may be missing on our side (the refund-creation call timed
+ * out before we recorded it), so this also matches by `refundNo`, which we
+ * always send as a `note` on creation and Razorpay echoes back on the refund
+ * entity.
+ */
+export async function settleWebhookRefund({ gatewayRefundId, refundNo, status }) {
+  // Try the gateway id first; a refund that timed out on creation never got one
+  // stored, so fall back to refundNo (always sent as a note, echoed back by Razorpay).
+  const seed = (gatewayRefundId && await prisma.refund.findUnique({ where: { gatewayRefundId } }))
+    || (refundNo && await prisma.refund.findUnique({ where: { refundNo } }))
+    || null;
+  if (!seed) return { ignored: "unknown refund" };
+
+  return prisma.$transaction(async (tx) => {
+    // Lock on the charge (shared with every other payment/refund write) so two
+    // deliveries of the same event can never both pass the checks below.
+    await lockCharge(tx, seed.chargeId);
+    const r = await tx.refund.findUnique({ where: { id: seed.id } });
+    if (r.status === status && r.gatewayRefundId) return { alreadySettled: true };
+    // "failed" is not terminal here: a timed-out refundPayment() call leaves it
+    // "pending" locally even when Razorpay actually accepted it, and the real
+    // webhook corrects that. Only a refund already paid out is left alone.
+    if (r.status === "processed") return { ignored: "refund already processed" };
+
+    const data = { status };
+    if (gatewayRefundId && !r.gatewayRefundId) data.gatewayRefundId = gatewayRefundId;
+    await tx.refund.update({ where: { id: r.id }, data });
+
     if (status === "failed") {
       if (r.adjustCharge) await tx.rentCharge.update({ where: { id: r.chargeId }, data: { amount: { increment: r.amount } } });
       await notifyStaffUsers(tx, r.propertyId, "Refund failed", `Refund ${r.refundNo} of ${inr(r.amount)} failed at Razorpay and was not paid out.`, "payment", "/manager/payments", "/owner/finance");
@@ -473,8 +512,8 @@ export async function settleWebhookRefund({ gatewayRefundId, status }) {
       if (r.adjustCharge) await tx.rentCharge.update({ where: { id: r.chargeId }, data: { amount: { decrement: r.amount } } });
       await notifyStaffUsers(tx, r.propertyId, "Refund corrected", `Refund ${r.refundNo} of ${inr(r.amount)} actually went through at Razorpay after being marked failed.`, "payment", "/manager/payments", "/owner/finance");
     }
+    return { settled: status };
   });
-  return { settled: status };
 }
 
 const refundView = (r) => ({ ...r, createdAt: r.createdAt.toISOString(), updatedAt: undefined });

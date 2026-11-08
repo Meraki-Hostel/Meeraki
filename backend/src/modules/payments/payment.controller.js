@@ -44,7 +44,9 @@ export const webhook = asyncHandler(async (req, res) => {
   let result = { ignored: event?.event };
   if (event?.event === "payment.captured" || event?.event === "order.paid") result = await svc.confirmWebhookPayment(facts);
   else if (event?.event === "payment.failed") result = await svc.failWebhookPayment(facts);
-  else if (event?.event === "refund.processed") result = await svc.settleWebhookRefund({ gatewayRefundId: refundEntity.id, status: "processed" });
-  else if (event?.event === "refund.failed") result = await svc.settleWebhookRefund({ gatewayRefundId: refundEntity.id, status: "failed" });
+  // refundEntity.notes echoes back what we sent on creation, including refundNo —
+  // the only way to match a refund we lost track of after a timed-out create call.
+  else if (event?.event === "refund.processed") result = await svc.settleWebhookRefund({ gatewayRefundId: refundEntity.id, refundNo: refundEntity.notes?.refundNo, status: "processed" });
+  else if (event?.event === "refund.failed") result = await svc.settleWebhookRefund({ gatewayRefundId: refundEntity.id, refundNo: refundEntity.notes?.refundNo, status: "failed" });
   res.json({ ok: true, result });
 });

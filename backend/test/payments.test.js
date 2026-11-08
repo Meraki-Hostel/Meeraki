@@ -289,3 +289,101 @@ describe("webhook outside Razorpay mode", () => {
     assert.equal((await webhook("order_x")).status, 404);
   });
 });
+
+// ── Refunds (gateway stubbed) ─────────────────────────────────────────────────
+// A fresh stub covering only /refund, used after an order/capture was already
+// created (and its own stub restored) via captureOnlinePayment() below. Lets a
+// single test simulate a gateway rejection, a success, or a dropped response
+// (network timeout — the thing that actually causes the double-payout bug).
+function stubRefundCall(onRefundCall) {
+  const realFetch = globalThis.fetch;
+  globalThis.fetch = async (url, init) =>
+    String(url).includes("/refund") ? onRefundCall(JSON.parse(init.body)) : realFetch(url, init);
+  return { restore: () => { globalThis.fetch = realFetch; } };
+}
+
+const refundEntityPayload = (refundId, status, amountPaise, notes) => JSON.stringify({
+  event: status === "processed" ? "refund.processed" : "refund.failed",
+  payload: { refund: { entity: { id: refundId, amount: amountPaise, status, notes } } },
+});
+
+describe("refunds (gateway stubbed)", () => {
+  let gw;
+  afterEach(() => { gw?.restore(); env.payments.mode = "simulated"; });
+
+  // Gets one captured online payment to refund against.
+  const captureOnlinePayment = async () => {
+    env.payments.mode = "razorpay";
+    gw = stubGateway();
+    const stu = await as(w.users.studentA);
+    await stu.post("/payments/pay-now", { chargeId: w.chargeA.id, method: "upi" });
+    await webhook(gw.orders[0].id);
+    gw.restore();
+    return prisma.payment.findFirst({ where: { gatewayOrderId: gw.orders[0].id } });
+  };
+
+  test("a gateway rejection fails the refund and restores an adjusted charge", async () => {
+    const payment = await captureOnlinePayment();
+    const before = await prisma.rentCharge.findUnique({ where: { id: payment.chargeId } });
+    gw = stubRefundCall(() => new Response(JSON.stringify({ error: { description: "Insufficient balance" } }), { status: 400 }));
+
+    const res = await (await as(w.users.owner)).post(`/payments/${payment.id}/refund`, { amount: 9500, reason: "Move-out", adjustCharge: true });
+    assert.equal(res.status, 409, JSON.stringify(res.body));
+
+    const refund = await prisma.refund.findFirst({ where: { paymentId: payment.id } });
+    assert.equal(refund.status, "failed");
+    assert.equal(refund.gatewayRefundId, null);
+    const after = await prisma.rentCharge.findUnique({ where: { id: payment.chargeId } });
+    assert.equal(after.amount, before.amount, "the charge reduction was not undone");
+  });
+
+  test("a dropped response (timeout) does not let the same amount be refunded twice", async () => {
+    const payment = await captureOnlinePayment();
+    gw = stubRefundCall(() => { throw new TypeError("fetch failed"); });
+
+    const res = await (await as(w.users.owner)).post(`/payments/${payment.id}/refund`, { amount: 9500, reason: "Move-out" });
+    assert.equal(res.status, 409);
+
+    const refund = await prisma.refund.findFirst({ where: { paymentId: payment.id } });
+    assert.equal(refund.status, "pending", "an unknown outcome must not be recorded as failed");
+
+    // The owner tries again while the first attempt's outcome is still unknown:
+    // the un-refunded balance must already be zero, so a second real refund can't start.
+    const again = await (await as(w.users.owner)).post(`/payments/${payment.id}/refund`, { amount: 9500, reason: "Move-out" });
+    assert.equal(again.status, 422, JSON.stringify(again.body));
+  });
+
+  test("the refund.processed webhook settles a timed-out refund, matched by refundNo since no gateway id was ever stored", async () => {
+    const payment = await captureOnlinePayment();
+    gw = stubRefundCall(() => { throw new TypeError("fetch failed"); });
+    await (await as(w.users.owner)).post(`/payments/${payment.id}/refund`, { amount: 9500, reason: "Move-out" });
+    const pending = await prisma.refund.findFirst({ where: { paymentId: payment.id } });
+    assert.equal(pending.gatewayRefundId, null);
+
+    const raw = refundEntityPayload("rfnd_test_1", "processed", 950000, { refundNo: pending.refundNo });
+    const res = await webhookRaw(raw);
+    assert.equal(res.status, 200, JSON.stringify(res.body));
+
+    const settled = await prisma.refund.findUnique({ where: { id: pending.id } });
+    assert.equal(settled.status, "processed");
+    assert.equal(settled.gatewayRefundId, "rfnd_test_1");
+  });
+
+  test("two concurrent refund.processed deliveries for the same refund settle exactly once", async () => {
+    const payment = await captureOnlinePayment();
+    gw = stubRefundCall(() => new Response(JSON.stringify({ id: "rfnd_test_2", status: "pending" }), { status: 200 }));
+    await (await as(w.users.owner)).post(`/payments/${payment.id}/refund`, { amount: 9500, reason: "Move-out", adjustCharge: true });
+    const refund = await prisma.refund.findFirst({ where: { paymentId: payment.id } });
+    const before = await prisma.rentCharge.findUnique({ where: { id: payment.chargeId } });
+
+    const raw = refundEntityPayload("rfnd_test_2", "processed", 950000, { refundNo: refund.refundNo });
+    const results = await Promise.all([webhookRaw(raw), webhookRaw(raw)]);
+    assert.ok(results.every((r) => r.status === 200));
+
+    assert.equal((await prisma.refund.findUnique({ where: { id: refund.id } })).status, "processed");
+    // adjustCharge was already applied when the refund was created; the webhook
+    // must not reduce the charge again just because it was delivered twice.
+    const after = await prisma.rentCharge.findUnique({ where: { id: payment.chargeId } });
+    assert.equal(after.amount, before.amount);
+  });
+});
