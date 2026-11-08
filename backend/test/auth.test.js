@@ -100,6 +100,20 @@ describe("auth: access follows the database, not the token", () => {
     assert.equal(stillSeesA, false, "old token still reads hostel A after reassignment");
   });
 
+  test("a manager with no property is refused, never shown every tenant's rows", async () => {
+    // Prisma reads `{ propertyId: undefined }` as "no filter"; that must never be reachable.
+    const mgr = await prisma.user.create({
+      data: { orgId: w.org.id, name: "Floating", email: "floating@example.test", phone: "9800077777", role: "manager", title: "m", propertyId: w.A.id,
+        passwordHash: (await prisma.user.findUnique({ where: { id: w.users.managerA.id } })).passwordHash },
+    });
+    const token = (await login(mgr)).body.data.accessToken;
+    await prisma.user.update({ where: { id: mgr.id }, data: { propertyId: null } });
+    for (const path of ["/students", "/complaints", "/charges", "/staff", "/rooms"]) {
+      const res = await api(token).get(path);
+      assert.equal(res.status, 403, `${path} answered ${res.status}`);
+    }
+  });
+
   test("a deleted user's access token stops working", async () => {
     const u = await prisma.user.create({
       data: { orgId: w.org.id, name: "Gone", email: "gone@example.test", phone: "9800088888", role: "manager", title: "m", propertyId: w.A.id,
@@ -111,31 +125,20 @@ describe("auth: access follows the database, not the token", () => {
   });
 });
 
-describe("auth: flows that are not built answer honestly instead of claiming success", () => {
-  test("[DEF-B4] reset-password does not report success while it changes nothing", async () => {
+// Full reset / invitation / session flows are covered in accounts.test.js.
+describe("auth: link flows refuse unknown tokens without changing anything", () => {
+  test("reset-password with an unknown token is EXPIRED and changes nothing", async () => {
+    const before = (await prisma.user.findUnique({ where: { id: w.users.studentA.id } })).passwordHash;
     const res = await rawRequest().post("/api/v1/auth/reset-password").send({ token: "any-token", password: "NewPassw0rd!" });
-    assert.equal(res.status, 501, `reset-password answered ${res.status}`);
-    assert.equal(res.body.error.code, "NOT_IMPLEMENTED");
+    assert.equal(res.status, 410);
+    assert.equal(res.body.error.code, "EXPIRED");
+    assert.equal((await prisma.user.findUnique({ where: { id: w.users.studentA.id } })).passwordHash, before);
   });
 
-  test("[DEF-B4] accepting an invitation does not report success without creating an account", async () => {
-    await prisma.invitation.create({
-      data: { orgId: w.org.id, token: "inv-test-1", name: "New Warden", email: "warden@example.test", role: "manager",
-        propertyId: w.A.id, invitedBy: "test", expiresAt: new Date(Date.now() + 864e5) },
-    });
-    const res = await rawRequest().post("/api/v1/auth/invitations/accept").send({ token: "inv-test-1", password: "NewPassw0rd!" });
-    assert.equal(res.status, 501, `accept answered ${res.status}`);
-    assert.equal(res.body.error.code, "NOT_IMPLEMENTED");
+  test("accepting an unknown invitation creates no account", async () => {
+    const res = await rawRequest().post("/api/v1/auth/invitations/accept").send({ token: "no-such-invitation", password: "NewPassw0rd!" });
+    assert.equal(res.status, 404);
     assert.equal(await prisma.user.count({ where: { email: "warden@example.test" } }), 0);
-    const inv = await prisma.invitation.findUnique({ where: { token: "inv-test-1" } });
-    assert.equal(inv.status, "pending", "the invitation was consumed although no account was created");
-  });
-
-  test("[DEF-B4] forgot-password does not claim a message was sent when no provider exists", async () => {
-    const res = await rawRequest().post("/api/v1/auth/forgot-password").send({ identifier: w.users.studentA.email });
-    assert.equal(res.status, 503, `forgot-password answered ${res.status}`);
-    assert.equal(res.body.error.code, "NOT_CONFIGURED");
-    assert.equal(res.body.data, null, "no 'we sent a link to …' payload");
   });
 });
 
@@ -156,9 +159,19 @@ describe("auth: the token proves identity; the database decides scope", () => {
     assert.equal((await api(token).get("/properties")).status, 401);
   });
 
-  test("access tokens carry only identity and role, not scope", async () => {
+  test("access tokens carry only identity, role and token version, not scope", async () => {
     const token = (await login(w.users.owner)).body.data.accessToken;
-    assert.deepEqual(Object.keys(jwt.decode(token)).sort(), ["exp", "iat", "role", "sub"]);
+    assert.deepEqual(Object.keys(jwt.decode(token)).sort(), ["exp", "iat", "role", "sub", "tv"]);
+  });
+
+  test("password guessing locks one account out, not everyone sharing the connection", async () => {
+    const guess = (identifier) => rawRequest().post("/api/v1/auth/login").send({ role: "manager", identifier, password: "wrong-password-1" });
+    for (let i = 0; i < 10; i++) assert.equal((await guess("target@example.test")).status, 401);
+    const blocked = await guess("target@example.test");
+    assert.equal(blocked.status, 429);
+    assert.match(blocked.body.error.message, /Too many sign-in attempts/, "429 must use the API error envelope");
+    // A neighbour on the same IP signs in normally.
+    assert.equal((await login(w.users.managerB)).status, 200);
   });
 
   test("an unknown account and a wrong password are indistinguishable", async () => {

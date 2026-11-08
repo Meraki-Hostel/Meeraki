@@ -141,7 +141,7 @@ describe("the database refuses cross-organization links", () => {
 
   test("staff, invitations and activity rows pointing across organizations", async () => {
     await assert.rejects(prisma.staffMember.create({ data: { orgId: w.org.id, name: "s", role: "warden", propertyId: x.X.id, phone: "1", email: "s@example.test", joinedOn: new Date() } }), /Foreign key constraint/i);
-    await assert.rejects(prisma.invitation.create({ data: { orgId: w.org.id, token: "t-x", name: "n", email: "n@example.test", role: "manager", propertyId: x.X.id, invitedBy: "x", expiresAt: new Date() } }), /Foreign key constraint/i);
+    await assert.rejects(prisma.invitation.create({ data: { orgId: w.org.id, tokenHash: "t-x", name: "n", email: "n@example.test", role: "manager", propertyId: x.X.id, invitedBy: "x", expiresAt: new Date() } }), /Foreign key constraint/i);
     await assert.rejects(prisma.activityLog.create({ data: { orgId: w.org.id, propertyId: x.X.id, actorName: "a", actorRole: "owner", category: "c", message: "m" } }), /Foreign key constraint/i);
   });
 });

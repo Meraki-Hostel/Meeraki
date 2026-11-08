@@ -1,11 +1,19 @@
 import { prisma } from "../../config/prisma.js";
-import { ApiError, notFound, forbidden, invalid } from "../../utils/ApiError.js";
-import { isIndianPhone, normalizePhone } from "../../utils/validators.js";
+import { ApiError, notFound, forbidden, invalid, conflict } from "../../utils/ApiError.js";
+import { isEmail, isIndianPhone, normalizePhone } from "../../utils/validators.js";
 import { requireRole, assertPropertyAccess, propertyScope } from "../../utils/scope.js";
-import { withBalance, iso, todayISO, counted } from "../../utils/money.js";
+import { withBalance, iso, todayISO, counted, currentPeriod } from "../../utils/money.js";
+import { ledgerRows, balancesByStudent } from "../../utils/ledger.js";
+import { logActivity } from "../../utils/sideEffects.js";
+import { issueInvitation, deliverInvitation } from "../invitations/invitation.service.js";
+import { generateRent } from "../payments/charge.service.js";
+import { studentExtras } from "./student.extras.js";
+
+const inr = (n) => `₹${Number(n).toLocaleString("en-IN")}`;
 
 function serialize(s) {
-  return { ...s, dob: iso(s.dob), joinedOn: iso(s.joinedOn) };
+  const { createdAt, updatedAt, ...rest } = s;
+  return { ...rest, roomId: s.roomId ?? undefined, bedId: s.bedId ?? undefined, dob: iso(s.dob), joinedOn: iso(s.joinedOn) };
 }
 
 function toListItem(s, maps) {
@@ -19,20 +27,6 @@ function toListItem(s, maps) {
   };
 }
 
-async function balanceMap(studentIds) {
-  const charges = await prisma.rentCharge.findMany({ where: { studentId: { in: studentIds } } });
-  const payments = await prisma.payment.findMany({
-    where: { studentId: { in: studentIds }, ...counted }, select: { chargeId: true, amount: true, studentId: true },
-  });
-  const today = todayISO();
-  const m = new Map();
-  for (const c of charges) {
-    const wb = withBalance(c, payments, today);
-    m.set(c.studentId, (m.get(c.studentId) ?? 0) + wb.balance);
-  }
-  return m;
-}
-
 // Names for exactly the rows being returned (never a table-wide scan of every tenant).
 async function lookupMaps(students) {
   const ids = (key) => [...new Set(students.map((s) => s[key]).filter(Boolean))];
@@ -40,7 +34,7 @@ async function lookupMaps(students) {
     prisma.property.findMany({ where: { id: { in: ids("propertyId") } }, select: { id: true, name: true } }),
     prisma.room.findMany({ where: { id: { in: ids("roomId") } }, select: { id: true, number: true } }),
     prisma.bed.findMany({ where: { id: { in: ids("bedId") } }, select: { id: true, label: true } }),
-    balanceMap(students.map((s) => s.id)),
+    balancesByStudent(students.map((s) => s.id)),
   ]);
   return {
     pById: new Map(properties.map((p) => [p.id, p.name])),
@@ -70,22 +64,22 @@ async function detail(auth, id) {
   if (auth.role === "student" && auth.studentId !== id) throw forbidden();
   if (auth.role !== "student") await assertPropertyAccess(auth, s.propertyId);
 
-  const [maps, chargesRaw, paymentsRaw] = await Promise.all([
+  const [maps, chargesRaw, paymentsRaw, rows, extras] = await Promise.all([
     lookupMaps([s]),
     prisma.rentCharge.findMany({ where: { studentId: id } }),
     prisma.payment.findMany({ where: { studentId: id, ...counted } }),
+    ledgerRows(prisma, { studentId: id }),
+    studentExtras(auth, s),
   ]);
   const today = todayISO();
   const charges = chargesRaw
-    .map((c) => ({ ...withBalance(c, paymentsRaw, today), dueDate: iso(c.dueDate) }))
-    .sort((a, b) => b.period.localeCompare(a.period));
+    .map((c) => ({ ...withBalance(c, rows, today), dueDate: iso(c.dueDate), createdAt: undefined, updatedAt: undefined }))
+    .sort((a, b) => b.period.localeCompare(a.period) || a.dueDate.localeCompare(b.dueDate));
   const payments = paymentsRaw
-    .map((p) => ({ ...p, paidOn: iso(p.paidOn) }))
+    .map((p) => ({ ...p, paidOn: iso(p.paidOn), createdAt: undefined }))
     .sort((a, b) => b.paidOn.localeCompare(a.paidOn));
 
-  // Documents, complaints, leave and visitors have no backend module yet. They are
-  // omitted (not returned as []) so a screen can show "not available" instead of "none".
-  return { student: toListItem(s, maps), charges, payments };
+  return { student: toListItem(s, maps), charges, payments, ...extras };
 }
 
 export const get = (auth, id) => detail(auth, id);
@@ -119,6 +113,28 @@ async function allocateStudentCode(tx) {
 const codeTaken = () =>
   new ApiError("CONFLICT", "That student code is already in use.", { studentCode: "That student code is already in use." });
 
+const phoneTaken = () =>
+  new ApiError("CONFLICT", "That mobile number is already registered to another resident.", { phone: "That mobile number is already registered to another resident." });
+
+// Valid numbers are stored as their 10 digits, like the sign-in account's copy.
+const storedPhone = (phone) => (isIndianPhone(phone) ? normalizePhone(phone) : phone);
+
+// A mobile number belongs to one current resident per organization (moved-out
+// residents don't count). Older rows may hold formatted numbers ("98765 43210"),
+// so the comparison normalises in SQL. The advisory lock makes two simultaneous
+// saves of the same number queue up, so they cannot both pass the check.
+async function assertPhoneFree(tx, orgId, phone, exceptStudentId = "") {
+  const digits = normalizePhone(phone);
+  if (!digits) return;
+  await tx.$executeRaw`SELECT pg_advisory_xact_lock(hashtext(${`student-phone:${orgId}:${digits}`}))`;
+  const [clash] = await tx.$queryRaw`
+    SELECT s."id" FROM "StudentProfile" s JOIN "Property" p ON p."id" = s."propertyId"
+    WHERE p."orgId" = ${orgId} AND s."status" <> 'moved_out' AND s."id" <> ${exceptStudentId}
+      AND right(regexp_replace(s."phone", '[^0-9]', '', 'g'), 10) = ${digits}
+    LIMIT 1`;
+  if (clash) throw phoneTaken();
+}
+
 // A student's sign-in account mirrors their contact details; keep both in step.
 async function syncLogin(tx, studentId, { email, phone }) {
   const data = {};
@@ -133,7 +149,13 @@ async function syncLogin(tx, studentId, { email, phone }) {
   if (Object.keys(data).length) await tx.user.updateMany({ where: { studentId }, data });
 }
 
-export async function create(auth, input) {
+/**
+ * Admits a resident. Optionally (default: when they have an email) issues the
+ * invitation that lets them create their sign-in, and raises a security deposit.
+ * An admission with a bed is billed for the current month straight away
+ * (pro-rated from the joining day), instead of waiting for the daily job.
+ */
+export async function create(auth, input, actorName = "Staff") {
   requireRole(auth, "owner", "manager");
   const propertyId = auth.role === "owner" ? input.propertyId ?? auth.propertyId : auth.propertyId;
   if (!propertyId) throw invalid({ propertyId: "Property is required" });
@@ -143,12 +165,18 @@ export async function create(auth, input) {
   if (requestedCode && (await prisma.studentProfile.findUnique({ where: { studentCode: requestedCode }, select: { id: true } }))) {
     throw codeTaken();
   }
+  const sendInvite = input.sendInvite ?? isEmail(input.email ?? "");
+  if (sendInvite && (await prisma.user.findFirst({ where: { email: { equals: input.email, mode: "insensitive" } }, select: { id: true } }))) {
+    throw new ApiError("CONFLICT", "That email is already used by another account.", { email: "That email is already used by another account." });
+  }
 
+  let invitation = null;
   const created = await prisma.$transaction(async (tx) => {
+    await assertPhoneFree(tx, auth.orgId, input.phone);
     const studentCode = requestedCode || (await allocateStudentCode(tx));
     const s = await tx.studentProfile.create({
       data: {
-        studentCode, name: input.name, email: input.email, phone: input.phone,
+        studentCode, name: input.name, email: input.email, phone: storedPhone(input.phone),
         gender: input.gender, dob: new Date(input.dob), college: input.college, course: input.course,
         year: input.year, propertyId, status: input.bedId ? "active" : "pending",
         joinedOn: new Date(input.joinedOn), monthlyRent: input.monthlyRent, address: input.address ?? "",
@@ -165,9 +193,28 @@ export async function create(auth, input) {
       if (!count) throw invalid({ bedId: "Selected bed is not available" });
       await tx.studentProfile.update({ where: { id: s.id }, data: { bedId: bed.id, roomId: bed.roomId } });
     }
+    if (input.deposit > 0) {
+      await tx.rentCharge.create({
+        data: {
+          studentId: s.id, propertyId, kind: "deposit", period: iso(s.joinedOn).slice(0, 7), amount: input.deposit,
+          dueDate: s.joinedOn, description: "Security deposit (refundable)", createdBy: actorName,
+        },
+      });
+    }
+    if (sendInvite) {
+      invitation = await issueInvitation(tx, { orgId: auth.orgId, propertyId, role: "student", name: s.name, email: s.email, studentId: s.id, invitedBy: actorName });
+    }
+    await logActivity(tx, auth, actorName, "student", `New resident admitted: ${s.name}${input.deposit > 0 ? ` (deposit ${inr(input.deposit)})` : ""}`, propertyId, `/manager/students/${s.id}`);
     return tx.studentProfile.findUnique({ where: { id: s.id } });
   });
-  return serialize(created);
+  // The resident is already saved; a failure raising this month's rent must not be
+  // reported as a failed admission (the daily job backfills any charge missed here).
+  if (created.status === "active") {
+    try { await generateRent({ period: currentPeriod(), orgId: auth.orgId, propertyId }); }
+    catch (err) { console.error("generateRent after admission failed:", err.message); }
+  }
+  const invite = invitation ? await deliverInvitation(invitation) : null;
+  return { ...serialize(created), invite: invite ? { inviteLink: invite.inviteLink, emailSent: invite.emailSent } : undefined };
 }
 
 export async function update(auth, id, patch) {
@@ -184,7 +231,9 @@ export async function update(auth, id, patch) {
     if (data.studentCode !== s.studentCode
       && (await prisma.studentProfile.findUnique({ where: { studentCode: data.studentCode }, select: { id: true } }))) throw codeTaken();
   }
+  if (data.phone !== undefined) data.phone = storedPhone(data.phone);
   const updated = await prisma.$transaction(async (tx) => {
+    if (data.phone !== undefined) await assertPhoneFree(tx, auth.orgId, data.phone, id);
     const row = await tx.studentProfile.update({ where: { id }, data });
     await syncLogin(tx, id, { email: patch.email, phone: patch.phone });
     return row;
@@ -192,11 +241,18 @@ export async function update(auth, id, patch) {
   return serialize(updated);
 }
 
-export async function setStatus(auth, id, status) {
+export async function setStatus(auth, id, status, { force = false } = {}) {
   requireRole(auth, "owner", "manager");
   const s = await prisma.studentProfile.findUnique({ where: { id } });
   if (!s) throw notFound("Student");
   await assertPropertyAccess(auth, s.propertyId);
+  // Moving out with unpaid dues needs an owner's explicit decision.
+  if (status === "moved_out" && s.status !== "moved_out") {
+    const due = (await balancesByStudent([id])).get(id) ?? 0;
+    if (due > 0 && !(force && auth.role === "owner")) {
+      throw conflict(`${s.name} still owes ${inr(due)}. Collect or adjust the dues first${auth.role === "owner" ? ", or confirm the move-out anyway" : ", or ask the owner to approve the move-out"}.`);
+    }
+  }
   // Moving out releases the bed in the same transaction (occupancy stays consistent).
   const updated = await prisma.$transaction(async (tx) => {
     if (status === "moved_out" && s.bedId) {
@@ -214,7 +270,9 @@ export async function updateSelf(auth, patch) {
   requireRole(auth, "student");
   const allowed = (({ email, phone, address, emergencyName, emergencyPhone, bloodGroup }) =>
     ({ email, phone, address, emergencyName, emergencyPhone, bloodGroup }))(patch);
+  if (allowed.phone !== undefined) allowed.phone = storedPhone(allowed.phone);
   const updated = await prisma.$transaction(async (tx) => {
+    if (allowed.phone !== undefined) await assertPhoneFree(tx, auth.orgId, allowed.phone, auth.studentId);
     const row = await tx.studentProfile.update({ where: { id: auth.studentId }, data: allowed });
     await syncLogin(tx, auth.studentId, { email: allowed.email, phone: allowed.phone });
     return row;

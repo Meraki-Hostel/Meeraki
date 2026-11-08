@@ -121,9 +121,24 @@ describe("room creation and capacity", () => {
   });
 });
 
+// Moving out requires the resident's dues to be settled first.
+const settleA = (mgr) => mgr.post("/payments/record", { chargeId: w.chargeA.id, amount: 9500, method: "cash", paidOn: "2026-01-05", reference: "" });
+
 describe("checkout releases the bed and updates occupancy", () => {
+  test("moving out with unpaid dues is refused for a manager, and allowed for an owner who confirms", async () => {
+    const mgr = await as(w.users.managerA);
+    const refused = await mgr.patch(`/students/${w.residentA.id}/status`, { status: "moved_out", force: true });
+    assert.equal(refused.status, 409);
+    assert.match(refused.body.error.message, /owes/);
+    const owner = await as(w.users.owner);
+    assert.equal((await owner.patch(`/students/${w.residentA.id}/status`, { status: "moved_out" })).status, 409);
+    assert.equal((await owner.patch(`/students/${w.residentA.id}/status`, { status: "moved_out", force: true })).status, 200);
+    assert.deepEqual(await bedInvariantViolations(), []);
+  });
+
   test("[DEF-03] setting a resident to moved_out frees their bed", async () => {
     const mgr = await as(w.users.managerA);
+    assert.equal((await settleA(mgr)).status, 201);
     const res = await mgr.patch(`/students/${w.residentA.id}/status`, { status: "moved_out" });
     assert.equal(res.status, 200);
     const bed = await prisma.bed.findUnique({ where: { id: w.roomA.beds[0].id } });
@@ -137,7 +152,8 @@ describe("checkout releases the bed and updates occupancy", () => {
   test("[DEF-03] property occupancy drops after a checkout", async () => {
     const mgr = await as(w.users.managerA);
     const before = (await mgr.get(`/properties/${w.A.id}`)).body.data.stats;
-    await mgr.patch(`/students/${w.residentA.id}/status`, { status: "moved_out" });
+    await settleA(mgr);
+    assert.equal((await mgr.patch(`/students/${w.residentA.id}/status`, { status: "moved_out" })).status, 200);
     const after = (await mgr.get(`/properties/${w.A.id}`)).body.data.stats;
     assert.equal(after.occupiedBeds, before.occupiedBeds - 1);
     assert.equal(after.availableBeds, before.availableBeds + 1);
@@ -154,7 +170,8 @@ describe("checkout releases the bed and updates occupancy", () => {
 describe("integrity under concurrency and edge cases", () => {
   test("a moved-out resident cannot be given a bed", async () => {
     const mgr = await as(w.users.managerA);
-    await mgr.patch(`/students/${w.residentA.id}/status`, { status: "moved_out" });
+    await settleA(mgr);
+    assert.equal((await mgr.patch(`/students/${w.residentA.id}/status`, { status: "moved_out" })).status, 200);
     const res = await mgr.post("/beds/assign", { studentId: w.residentA.id, bedId: w.roomA.beds[1].id });
     assert.equal(res.status, 409);
   });
@@ -163,7 +180,7 @@ describe("integrity under concurrency and edge cases", () => {
     const mgr = await as(w.users.managerA);
     const bedId = w.roomA.beds[1].id;
     for (let round = 0; round < 15; round++) {
-      const body = (n) => ({ name: `Racer ${round}-${n}`, email: `r${round}-${n}@example.test`, phone: "9876543210", gender: "male", dob: "2005-01-01",
+      const body = (n) => ({ name: `Racer ${round}-${n}`, email: `r${round}-${n}@example.test`, phone: `9100${String(round).padStart(4, "0")}0${n}`, gender: "male", dob: "2005-01-01",
         college: "c", course: "c", year: 1, joinedOn: "2026-01-01", monthlyRent: 1, bedId });
       const results = await Promise.all([mgr.post("/students", body(1)), mgr.post("/students", body(2))]);
       assert.deepEqual(results.map((r) => r.status).sort(), [201, 422], `round ${round}: ${JSON.stringify(results.map((r) => [r.status, r.body.error?.message]))}`);

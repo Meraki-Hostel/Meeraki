@@ -1,6 +1,6 @@
 import { verifyAccessToken } from "../utils/tokens.js";
 import { prisma } from "../config/prisma.js";
-import { unauthenticated } from "../utils/ApiError.js";
+import { unauthenticated, forbidden } from "../utils/ApiError.js";
 import { asyncHandler } from "../utils/asyncHandler.js";
 
 // Verifies the Bearer token sent by web OR app and sets req.auth (the acting
@@ -20,11 +20,19 @@ export const authenticate = asyncHandler(async (req, _res, next) => {
 
   const user = await prisma.user.findUnique({
     where: { id: payload.sub },
-    select: { id: true, role: true, orgId: true, propertyId: true, studentId: true },
+    select: { id: true, role: true, orgId: true, propertyId: true, studentId: true, staffId: true, tokenVersion: true, disabledAt: true },
   });
   if (!user) throw unauthenticated();
+  if (user.disabledAt) throw unauthenticated("This account has been deactivated. Contact your hostel admin.");
   // Role changed since this token was issued: make them sign in again.
   if (user.role !== payload.role) throw unauthenticated("Your access has changed. Sign in again.");
+  // Password changed or "sign out everywhere" since this token was issued.
+  if ((payload.tv ?? 0) !== user.tokenVersion) throw unauthenticated();
+  // Managers and students are scoped to one property. Without one, a scope filter
+  // would be `{ propertyId: undefined }`, which Prisma treats as "no filter" and
+  // would match every tenant's rows. Refuse instead of ever building that query.
+  if (user.role !== "owner" && !user.propertyId) throw forbidden("Your account isn't linked to a hostel yet. Contact your hostel admin.");
+  if (user.role === "student" && !user.studentId) throw forbidden("Your account isn't linked to a resident record. Contact your hostel admin.");
 
   req.auth = {
     userId: user.id,
@@ -32,6 +40,7 @@ export const authenticate = asyncHandler(async (req, _res, next) => {
     orgId: user.orgId,
     propertyId: user.propertyId || undefined,
     studentId: user.studentId || undefined,
+    staffId: user.staffId || undefined,
   };
   next();
 });

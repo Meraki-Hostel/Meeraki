@@ -15,6 +15,7 @@ import { Drawer, Modal } from '@/components/ui/Modal';
 import { StatusBadge, statusOptions } from '@/components/ui/StatusBadge';
 import { EmptyState, QueryBoundary, Skeleton } from '@/components/ui/States';
 import { ComplaintTimeline } from '@/components/domain/ComplaintTimeline';
+import { AttachmentList } from '@/components/domain/AttachmentList';
 import { addDays, todayISO } from '@/lib/clock';
 import { formatClock, formatDate, formatDateTime, sentenceCase } from '@/lib/format';
 
@@ -22,7 +23,7 @@ const CATS: ComplaintCategory[] = ['electrical', 'plumbing', 'cleaning', 'intern
 
 /* ---------------- Complaints ---------------- */
 function NewComplaintModal({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: (id: string) => void }) {
-  const blank = { category: 'electrical' as ComplaintCategory, title: '', description: '', priority: 'medium' as Priority, attachments: [] as string[] };
+  const blank = { category: 'electrical' as ComplaintCategory, title: '', description: '', priority: 'medium' as Priority, attachments: [] as File[] };
   const [f, setF] = useState(blank);
   const [fileErr, setFileErr] = useState<string>();
   useEffect(() => { if (open) { setF(blank); setFileErr(undefined); } }, [open]); // eslint-disable-line react-hooks/exhaustive-deps
@@ -32,7 +33,7 @@ function NewComplaintModal({ open, onClose, onCreated }: { open: boolean; onClos
     const bad = files.find((x) => x.size > 5 * 1024 * 1024);
     if (bad) { setFileErr(`${bad.name} is larger than 5 MB`); return; }
     setFileErr(undefined);
-    setF((x) => ({ ...x, attachments: [...x.attachments, ...files.map((y) => y.name)].slice(0, 3) }));
+    setF((x) => ({ ...x, attachments: [...x.attachments, ...files].slice(0, 3) }));
   };
   return (
     <Modal open={open} onClose={onClose} size="lg" title="Raise a complaint" description="Describe what’s wrong. You’ll see every update on this page."
@@ -43,10 +44,10 @@ function NewComplaintModal({ open, onClose, onCreated }: { open: boolean; onClos
         <Input className="sm:col-span-2" label="Title" required maxLength={80} value={f.title} onChange={(ev) => setF({ ...f, title: ev.target.value })} error={e.title} placeholder="e.g. Tap leaking in bathroom" />
         <Textarea className="sm:col-span-2" label="Details" required rows={4} value={f.description} onChange={(ev) => setF({ ...f, description: ev.target.value })} error={e.description} placeholder="When did it start? Where exactly?" />
         <div className="sm:col-span-2">
-          <FilePicker label="Add photos or a short video" hint="Up to 3 files, 5 MB each. Demo: only file names are saved." accept="image/*,video/*" multiple onPick={pick} error={fileErr} disabled={f.attachments.length >= 3} />
+          <FilePicker label="Add photos or a short video" hint="Up to 3 files, 5 MB each (JPG, PNG, WebP, MP4 or MOV). Only the hostel office can see them." accept="image/jpeg,image/png,image/webp,video/mp4,video/quicktime" multiple onPick={pick} error={fileErr ?? e.file ?? e.attachments} disabled={f.attachments.length >= 3} />
           {f.attachments.length > 0 && <ul className="mt-2 flex flex-wrap gap-2">{f.attachments.map((a, i) => (
-            <li key={`${a}-${i}`} className="inline-flex items-center gap-1 rounded-lg border border-line bg-white px-2 py-1 text-xs"><Paperclip className="size-3" aria-hidden />{a}
-              <button type="button" aria-label={`Remove ${a}`} onClick={() => setF({ ...f, attachments: f.attachments.filter((_, j) => j !== i) })} className="text-dust hover:text-brick"><X className="size-3" /></button></li>
+            <li key={`${a.name}-${i}`} className="inline-flex items-center gap-1 rounded-lg border border-line bg-white px-2 py-1 text-xs"><Paperclip className="size-3" aria-hidden />{a.name}
+              <button type="button" aria-label={`Remove ${a.name}`} onClick={() => setF({ ...f, attachments: f.attachments.filter((_, j) => j !== i) })} className="text-dust hover:text-brick"><X className="size-3" /></button></li>
           ))}</ul>}
         </div>
       </div>
@@ -63,7 +64,7 @@ function StudentComplaintDrawer({ c, onClose }: { c: ComplaintView | null; onClo
     <Drawer open onClose={onClose} title={c.title} description={<span className="flex items-center gap-2">{c.ticketNo} <StatusBadge kind="complaint" value={c.status} /> <StatusBadge kind="priority" value={c.priority} /></span>}>
       <p className="whitespace-pre-line text-sm text-espresso">{c.description}</p>
       <p className="mt-2 text-xs text-dust">{sentenceCase(c.category)} · raised {formatDateTime(c.createdAt)}{c.assigneeName ? ` · assigned to ${c.assigneeName}` : ''}</p>
-      {c.attachments.length > 0 && <ul className="mt-2 flex flex-wrap gap-2">{c.attachments.map((a) => <li key={a} className="inline-flex items-center gap-1 rounded-lg border border-line bg-white px-2 py-1 text-xs"><Paperclip className="size-3" aria-hidden />{a}</li>)}</ul>}
+      <AttachmentList complaint={c} />
       <h3 className="mb-3 mt-6 text-base font-semibold">Updates</h3>
       <ComplaintTimeline complaint={c} />
       {c.status !== 'closed' ? (

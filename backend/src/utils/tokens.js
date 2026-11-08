@@ -6,8 +6,10 @@ import { env } from "../config/env.js";
 // Property / student scope is deliberately NOT in the token: `authenticate`
 // reads it from the database on every request, so a reassigned or demoted user
 // loses access immediately instead of when the token expires.
-export function signAccessToken({ userId, role }) {
-  return jwt.sign({ sub: userId, role }, env.jwt.accessSecret, {
+// `tv` is the user's tokenVersion when the token was issued; bumping the version
+// (password change, sign out everywhere) makes every older token invalid at once.
+export function signAccessToken({ userId, role, tokenVersion = 0 }) {
+  return jwt.sign({ sub: userId, role, tv: tokenVersion }, env.jwt.accessSecret, {
     expiresIn: env.jwt.accessTtl,
   });
 }
@@ -20,3 +22,9 @@ export function generateRefreshToken() {
   return { raw, hash, expiresAt };
 }
 export const hashToken = (raw) => crypto.createHash("sha256").update(raw).digest("hex");
+
+/** Single-use secret for links (invitations, password reset): raw goes in the link, hash in the DB. */
+export function generateLinkToken() {
+  const raw = crypto.randomBytes(32).toString("base64url");
+  return { raw, hash: hashToken(raw) };
+}

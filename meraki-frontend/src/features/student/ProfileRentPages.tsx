@@ -15,6 +15,7 @@ import { PageSkeleton } from '@/components/ui/States';
 import { ReceiptModal } from '@/components/domain/ReceiptModal';
 import { METHOD_LABEL } from '@/features/owner/FinancePage';
 import { formatDate, formatINR, formatPeriod, formatPhone, sentenceCase } from '@/lib/format';
+import { openCheckout } from '@/lib/razorpay';
 
 export function StudentProfilePage() {
   const me = useQuery(() => services.students.me(), []);
@@ -60,28 +61,35 @@ export function StudentProfilePage() {
 }
 
 type PayMethod = 'upi' | 'card' | 'netbanking';
-// The demo wording is only true for the in-browser mock build.
-const USES_API = Boolean(import.meta.env.VITE_API_BASE_URL);
 function PayNowModal({ charge, onClose, onPaid }: { charge: ChargeWithBalance | null; onClose: () => void; onPaid: (p: Payment) => void }) {
   const [method, setMethod] = useState<PayMethod>('upi');
   const [done, setDone] = useState<Payment | null>(null);
-  // The API opened a real gateway order, but this app cannot show Razorpay Checkout yet.
-  const [checkoutUnavailable, setCheckoutUnavailable] = useState(false);
-  useEffect(() => { if (charge) { setDone(null); setCheckoutUnavailable(false); setMethod('upi'); } }, [charge?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-  const pay = useMutation((id: string) => services.payments.payNow(id, method), {
-    onSuccess: (r) => { if ('pending' in r) setCheckoutUnavailable(true); else setDone(r); },
+  // Razorpay took the payment but is still settling it; the webhook will confirm it.
+  const [processing, setProcessing] = useState(false);
+  useEffect(() => { if (charge) { setDone(null); setProcessing(false); setMethod('upi'); } }, [charge?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+  const pay = useMutation(async (id: string) => {
+    const r = await services.payments.payNow(id, method);
+    if (!('pending' in r)) return r; // simulated (development)
+    // Real money: Razorpay's own window, then the API verifies with Razorpay.
+    const ok = await openCheckout(r, { description: `${charge?.description || 'Rent'} (${charge?.period})`, method });
+    const result = await services.payments.verifyOnlinePayment({ orderId: ok.razorpay_order_id, paymentId: ok.razorpay_payment_id, signature: ok.razorpay_signature });
+    if (result.status === 'failed') throw new Error('Razorpay reported the payment failed. No money was taken.');
+    return result.payment ?? null;
+  }, {
+    onSuccess: (p) => { if (p) setDone(p); else setProcessing(true); },
+    toastErrors: true,
   });
   if (!charge) return null;
-  // Only a payment the API marks `captured` moved money; the demo and dev mode are simulated.
+  // Only a payment the API marks `captured` moved money; dev mode is simulated.
   const real = done?.status === 'captured';
-  const title = checkoutUnavailable ? 'Online checkout unavailable' : done ? (real ? 'Payment successful' : 'Simulated payment recorded') : `Pay ${formatPeriod(charge.period)} rent`;
+  const title = processing ? 'Payment processing' : done ? (real ? 'Payment successful' : 'Simulated payment recorded') : `Pay ${formatPeriod(charge.period)} ${charge.kind === 'deposit' ? 'deposit' : charge.kind === 'late_fee' ? 'late fee' : 'rent'}`;
   return (
     <Modal open onClose={onClose} size="sm" title={title}
-      footer={checkoutUnavailable ? <Button variant="secondary" onClick={onClose}>Close</Button>
+      footer={processing ? <Button variant="secondary" onClick={onClose}>Close</Button>
         : done ? <><Button variant="secondary" onClick={onClose}>Close</Button><Button icon={<Receipt className="size-4" />} onClick={() => { onPaid(done); onClose(); }}>View receipt</Button></>
         : <><Button variant="secondary" onClick={onClose} disabled={pay.pending}>Cancel</Button><Button loading={pay.pending} onClick={() => void pay.run(charge.id)}>{pay.pending ? 'Processing…' : `Pay ${formatINR(charge.balance)}`}</Button></>}>
-      {checkoutUnavailable ? (
-        <p className="text-sm text-bark" role="status">Online checkout is not available in the app yet. No money has been taken. Pay at the office and the manager will record it.</p>
+      {processing ? (
+        <p className="text-sm text-bark" role="status">Razorpay received your payment and is confirming it. This usually takes under a minute; your receipt appears on this page once it’s confirmed. Don’t pay again.</p>
       ) : done ? (
         <div className="flex flex-col items-center text-center" role="status">
           <CheckCircle2 className="size-12 text-moss" aria-hidden />
@@ -95,9 +103,7 @@ function PayNowModal({ charge, onClose, onPaid }: { charge: ChargeWithBalance | 
           <RadioGroup label="Pay with" name="pm" value={method} onChange={setMethod} options={[
             { value: 'upi', label: 'UPI', description: 'Any UPI app' }, { value: 'card', label: 'Debit / credit card' }, { value: 'netbanking', label: 'Net banking' },
           ]} />
-          <p className="flex gap-2 rounded-xl border border-slate-soft/60 bg-slate-wash/60 px-3 py-2 text-xs text-slate-ink"><ShieldCheck className="size-4 shrink-0" aria-hidden />{USES_API
-            ? 'Meraki never asks for card numbers, UPI PIN or bank passwords.'
-            : 'Demo mode: this simulates a successful payment. You will never be asked for card numbers, UPI PIN or bank passwords here.'}</p>
+          <p className="flex gap-2 rounded-xl border border-slate-soft/60 bg-slate-wash/60 px-3 py-2 text-xs text-slate-ink"><ShieldCheck className="size-4 shrink-0" aria-hidden />Payment opens in Razorpay’s secure window. Meraki never sees your card number, UPI PIN or bank password.</p>
         </div>
       )}
     </Modal>

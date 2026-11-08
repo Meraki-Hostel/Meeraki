@@ -1,8 +1,6 @@
 /**
- * Modules that have a real backend. Everything listed in FEATURE_LABEL but not in
- * AVAILABLE has no server side yet: it is hidden from navigation, its URL shows
- * "Not available yet", and its service rejects with NOT_IMPLEMENTED. When a
- * module's API lands, add it here and swap its service in services/index.ts.
+ * Modules that have a real backend. Anything listed in FEATURE_LABEL but not in
+ * AVAILABLE is hidden from navigation and its URL shows "Not available yet".
  */
 export const FEATURE_LABEL = {
   analytics: 'Analytics trends',
@@ -23,7 +21,8 @@ export const FEATURE_LABEL = {
 } as const;
 export type Feature = keyof typeof FEATURE_LABEL;
 
-const AVAILABLE = new Set<Feature>([]);
+// Every module now has a backend. Keep the gate so a future module can ship UI first.
+const AVAILABLE = new Set<Feature>(Object.keys(FEATURE_LABEL) as Feature[]);
 export const isAvailable = (f: Feature): boolean => AVAILABLE.has(f);
 
 /** Route → module, for hiding navigation entries and gating their URLs. */

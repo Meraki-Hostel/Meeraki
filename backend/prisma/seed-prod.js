@@ -1,3 +1,4 @@
+import "dotenv/config"; // plain `node` does not read .env (the Prisma CLI does)
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcryptjs";
 import { isEmail, isIndianPhone, normalizePhone } from "../src/utils/validators.js";
