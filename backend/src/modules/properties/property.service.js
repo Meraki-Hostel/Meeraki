@@ -104,17 +104,25 @@ export async function create(auth, input, actorName = "Owner") {
   return serialize(p);
 }
 
-export async function update(auth, id, input) {
+export async function update(auth, id, input, actorName = "Owner") {
   requireRole(auth, "owner"); // managers have no property-editing screen; rent, type and status are the owner's
   await assertPropertyAccess(auth, id);
   await assertOwnStaff(auth, input.managerStaffId);
-  const p = await prisma.property.update({ where: { id }, data: input });
+  const p = await prisma.$transaction(async (tx) => {
+    const row = await tx.property.update({ where: { id }, data: input });
+    await logActivity(tx, auth, actorName, "property", `Property updated: ${row.name}`, row.id, `/owner/properties/${row.id}`);
+    return row;
+  });
   return serialize(p);
 }
 
-export async function setStatus(auth, id, status) {
+export async function setStatus(auth, id, status, actorName = "Owner") {
   requireRole(auth, "owner");
   await assertPropertyAccess(auth, id); // another organization's property is "not found"
-  const p = await prisma.property.update({ where: { id }, data: { status } });
+  const p = await prisma.$transaction(async (tx) => {
+    const row = await tx.property.update({ where: { id }, data: { status } });
+    await logActivity(tx, auth, actorName, "property", `Property status changed to ${status.replace("_", " ")}: ${row.name}`, row.id, `/owner/properties/${row.id}`);
+    return row;
+  });
   return serialize(p);
 }
