@@ -4,5 +4,10 @@
 [build]
   command = "npm run build"
 
+[build.environment]
+  # Not actual secrets (a public URL and an email allowlist) — they just happen to
+  # match .env.example/README text, which trips Netlify's generic secrets scanner.
+  SECRETS_SCAN_OMIT_KEYS = "NEXTAUTH_URL,ADMIN_EMAIL_ALLOWLIST"
+
 [[plugins]]
   package = "@netlify/plugin-nextjs"
