@@ -1,0 +1,57 @@
+// Trimmed schema: only the models this app needs (Organization, User), pointed at
+// the SAME production database as backend/prisma/schema.prisma. Field names/types
+// must stay in sync with that file by hand if it changes.
+//
+// IMPORTANT: only ever run `prisma generate` here, never `prisma migrate` —
+// backend/ is the sole owner of migrations against this database.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+enum Role {
+  owner
+  manager
+  student
+}
+
+model Organization {
+  id        String   @id @default(uuid())
+  name      String
+  planId    String   @default("starter")
+  settings  Json     @default("{}")
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  users User[]
+}
+
+model User {
+  id           String    @id @default(uuid())
+  name         String
+  email        String    @unique
+  phone        String
+  role         Role
+  orgId        String
+  title        String    @default("")
+  passwordHash String
+  propertyId   String?
+  studentId    String?   @unique
+  staffId      String?
+  preferences  Json      @default("{\"emailDigest\":true,\"smsAlerts\":false,\"compactTables\":false}")
+  tokenVersion Int       @default(0)
+  disabledAt   DateTime?
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+
+  org Organization @relation(fields: [orgId], references: [id])
+
+  @@index([role])
+  @@index([orgId])
+}

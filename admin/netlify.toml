@@ -1,0 +1,8 @@
+# Netlify site for the internal admin panel: set Base directory = admin
+# and the env vars from admin/.env.example (DATABASE_URL, DIRECT_URL, NEXTAUTH_SECRET,
+# NEXTAUTH_URL = this site's own URL, GOOGLE_CLIENT_ID/SECRET, ADMIN_EMAIL_ALLOWLIST).
+[build]
+  command = "npm run build"
+
+[[plugins]]
+  package = "@netlify/plugin-nextjs"
