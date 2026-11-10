@@ -16,6 +16,7 @@ export const httpPropertyService: IPropertyService = {
 export const httpRoomService: IRoomService = {
   list: (filters = {}) => http.get<RoomWithBeds[]>('/rooms', filters),
   create: (input: RoomInput) => http.post<Room>('/rooms', input),
+  createBulk: (inputs: RoomInput[]) => http.post<Room[]>('/rooms/bulk', { propertyId: inputs[0]?.propertyId, rooms: inputs }),
   update: (id: ID, input: Partial<RoomInput>) => http.patch<Room>(`/rooms/${id}`, input),
   setBedStatus: (bedId: ID, status: Exclude<BedStatus, 'occupied'>, reason?: string) =>
     http.patch<Bed>(`/beds/${bedId}/status`, { status, reason }),

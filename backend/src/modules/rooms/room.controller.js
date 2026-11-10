@@ -4,6 +4,7 @@ import { asyncHandler } from "../../utils/asyncHandler.js";
 import { actorName } from "../../utils/sideEffects.js";
 export const list = asyncHandler(async (req, res) => ok(res, await svc.list(req.auth, req.query)));
 export const create = asyncHandler(async (req, res) => ok(res, await svc.create(req.auth, req.body, await actorName(req.auth)), 201));
+export const createBulk = asyncHandler(async (req, res) => ok(res, await svc.createBulk(req.auth, req.body, await actorName(req.auth)), 201));
 export const update = asyncHandler(async (req, res) => ok(res, await svc.update(req.auth, req.params.id, req.body, await actorName(req.auth))));
 export const setBedStatus = asyncHandler(async (req, res) => ok(res, await svc.setBedStatus(req.auth, req.params.bedId, req.body.status, req.body.reason, await actorName(req.auth))));
 export const assignBed = asyncHandler(async (req, res) => { await svc.assignBed(req.auth, req.body.studentId, req.body.bedId, await actorName(req.auth)); ok(res, { ok: true }); });

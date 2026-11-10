@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { BedDouble, Pencil, Plus, Snowflake, Wrench } from 'lucide-react';
+import { BedDouble, Pencil, Plus, Snowflake, Trash2, Wrench } from 'lucide-react';
 import { services } from '@/services';
 import type { BedView, RoomInput, RoomWithBeds } from '@/services/interfaces';
 import type { RoomStatus, RoomType } from '@/types/domain';
@@ -23,24 +23,70 @@ import { cn } from '@/lib/cn';
 const TYPES: RoomType[] = ['single', 'double', 'triple', 'quad'];
 const BEDS = { single: 1, double: 2, triple: 3, quad: 4 };
 
+type RoomRow = { number: string; floor: string; type: RoomType; rent: string; ac: boolean; attachedBath: boolean };
+const blankRow = (): RoomRow => ({ number: '', floor: '1', type: 'double', rent: '9500', ac: false, attachedBath: false });
+
 function RoomForm({ open, onClose, room }: { open: boolean; onClose: () => void; room: RoomWithBeds | null }) {
   const blank = { number: '', floor: '1', type: 'double' as RoomType, rent: '9500', ac: false, attachedBath: false, status: 'active' as RoomStatus };
   const [f, setF] = useState(blank);
-  useEffect(() => { if (open) setF(room ? { number: room.number, floor: String(room.floor), type: room.type, rent: String(room.rent), ac: room.ac, attachedBath: room.attachedBath, status: room.status } : blank); }, [open, room?.id]); // eslint-disable-line react-hooks/exhaustive-deps
-  const save = useMutation((i: RoomInput) => (room ? services.rooms.update(room.id, i) : services.rooms.create(i)), { success: room ? 'Room updated.' : 'Room added with its beds.', onSuccess: onClose });
-  const e = save.fieldErrors;
+  const [rows, setRows] = useState<RoomRow[]>([blankRow()]);
+  useEffect(() => {
+    if (!open) return;
+    if (room) setF({ number: room.number, floor: String(room.floor), type: room.type, rent: String(room.rent), ac: room.ac, attachedBath: room.attachedBath, status: room.status });
+    else setRows([blankRow()]);
+  }, [open, room?.id]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const saveOne = useMutation((i: RoomInput) => services.rooms.update(room!.id, i), { success: 'Room updated.', onSuccess: onClose });
+  const saveMany = useMutation((inputs: RoomInput[]) => services.rooms.createBulk(inputs), {
+    success: (r) => (r.length === 1 ? 'Room added with its beds.' : `${r.length} rooms added with their beds.`),
+    onSuccess: onClose,
+  });
+  const addRow = () => setRows((rs) => [...rs, { ...rs[rs.length - 1], number: '' }]);
+  const removeRow = (idx: number) => setRows((rs) => rs.filter((_, i) => i !== idx));
+  const updateRow = (idx: number, patch: Partial<RoomRow>) => setRows((rs) => rs.map((r, i) => (i === idx ? { ...r, ...patch } : r)));
+  const rowError = (idx: number, field: string) => saveMany.fieldErrors[`rooms.${idx}.${field}`];
+
+  if (room) {
+    const e = saveOne.fieldErrors;
+    return (
+      <Modal open={open} onClose={onClose} title={`Edit Room ${room.number}`} description="Reducing capacity is blocked while extra beds are occupied."
+        footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button loading={saveOne.pending} onClick={() => void saveOne.run({ ...f, floor: Number(f.floor), rent: Number(f.rent) })}>Save room</Button></>}>
+        <div className="grid gap-4 sm:grid-cols-2">
+          <Input label="Room number" required value={f.number} onChange={(ev) => setF({ ...f, number: ev.target.value })} error={e.number} placeholder="e.g. 205" />
+          <Input label="Floor" type="number" min={0} max={20} required value={f.floor} onChange={(ev) => setF({ ...f, floor: ev.target.value })} error={e.floor} hint="0 = ground" />
+          <Select label="Sharing" value={f.type} onChange={(ev) => setF({ ...f, type: ev.target.value as RoomType })} error={e.type} options={TYPES.map((t) => ({ value: t, label: `${sentenceCase(t)} (${BEDS[t]} bed${BEDS[t] > 1 ? 's' : ''})` }))} />
+          <Input label="Rent per bed (₹/month)" type="number" min={1000} required value={f.rent} onChange={(ev) => setF({ ...f, rent: ev.target.value })} error={e.rent} hint="Updates rent for current occupants too" />
+          <Checkbox label="Air-conditioned" checked={f.ac} onChange={(ev) => setF({ ...f, ac: ev.target.checked })} />
+          <Checkbox label="Attached bathroom" checked={f.attachedBath} onChange={(ev) => setF({ ...f, attachedBath: ev.target.checked })} />
+          <Select className="sm:col-span-2" label="Room status" value={f.status} onChange={(ev) => setF({ ...f, status: ev.target.value as RoomStatus })} options={[{ value: 'active', label: 'Active' }, { value: 'maintenance', label: 'Under maintenance (no new allotments)' }]} />
+        </div>
+      </Modal>
+    );
+  }
+
   return (
-    <Modal open={open} onClose={onClose} title={room ? `Edit Room ${room.number}` : 'Add room'} description={room ? 'Reducing capacity is blocked while extra beds are occupied.' : 'Beds are created automatically from the room type.'}
-      footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button loading={save.pending} onClick={() => void save.run({ ...f, floor: Number(f.floor), rent: Number(f.rent) })}>{room ? 'Save room' : 'Add room'}</Button></>}>
-      <div className="grid gap-4 sm:grid-cols-2">
-        <Input label="Room number" required value={f.number} onChange={(ev) => setF({ ...f, number: ev.target.value })} error={e.number} placeholder="e.g. 205" />
-        <Input label="Floor" type="number" min={0} max={20} required value={f.floor} onChange={(ev) => setF({ ...f, floor: ev.target.value })} error={e.floor} hint="0 = ground" />
-        <Select label="Sharing" value={f.type} onChange={(ev) => setF({ ...f, type: ev.target.value as RoomType })} error={e.type} options={TYPES.map((t) => ({ value: t, label: `${sentenceCase(t)} (${BEDS[t]} bed${BEDS[t] > 1 ? 's' : ''})` }))} />
-        <Input label="Rent per bed (₹/month)" type="number" min={1000} required value={f.rent} onChange={(ev) => setF({ ...f, rent: ev.target.value })} error={e.rent} hint={room ? 'Updates rent for current occupants too' : undefined} />
-        <Checkbox label="Air-conditioned" checked={f.ac} onChange={(ev) => setF({ ...f, ac: ev.target.checked })} />
-        <Checkbox label="Attached bathroom" checked={f.attachedBath} onChange={(ev) => setF({ ...f, attachedBath: ev.target.checked })} />
-        {room && <Select className="sm:col-span-2" label="Room status" value={f.status} onChange={(ev) => setF({ ...f, status: ev.target.value as RoomStatus })} options={[{ value: 'active', label: 'Active' }, { value: 'maintenance', label: 'Under maintenance (no new allotments)' }]} />}
+    <Modal open={open} onClose={onClose} title={rows.length === 1 ? 'Add room' : `Add ${rows.length} rooms`} description="Beds are created automatically from each room's type."
+      footer={<><Button variant="secondary" onClick={onClose}>Cancel</Button><Button loading={saveMany.pending} onClick={() => void saveMany.run(rows.map((r) => ({ number: r.number, floor: Number(r.floor), type: r.type, rent: Number(r.rent), ac: r.ac, attachedBath: r.attachedBath })))}>{rows.length === 1 ? 'Add room' : `Add ${rows.length} rooms`}</Button></>}>
+      {saveMany.fieldErrors.rooms && <p className="mb-4 rounded-xl bg-amber-wash px-3 py-2 text-sm text-amber">{saveMany.fieldErrors.rooms}</p>}
+      <div className="space-y-4">
+        {rows.map((r, idx) => (
+          <div key={idx} className="rounded-2xl border border-line p-4">
+            <div className="mb-3 flex items-center justify-between">
+              <p className="text-sm font-semibold text-bark">Room {idx + 1}</p>
+              {rows.length > 1 && <IconButton size="sm" label={`Remove room ${idx + 1}`} onClick={() => removeRow(idx)}><Trash2 className="size-4" /></IconButton>}
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <Input label="Room number" required value={r.number} onChange={(ev) => updateRow(idx, { number: ev.target.value })} error={rowError(idx, 'number')} placeholder="e.g. 205" />
+              <Input label="Floor" type="number" min={0} max={20} required value={r.floor} onChange={(ev) => updateRow(idx, { floor: ev.target.value })} error={rowError(idx, 'floor')} hint="0 = ground" />
+              <Select label="Sharing" value={r.type} onChange={(ev) => updateRow(idx, { type: ev.target.value as RoomType })} error={rowError(idx, 'type')} options={TYPES.map((t) => ({ value: t, label: `${sentenceCase(t)} (${BEDS[t]} bed${BEDS[t] > 1 ? 's' : ''})` }))} />
+              <Input label="Rent per bed (₹/month)" type="number" min={1000} required value={r.rent} onChange={(ev) => updateRow(idx, { rent: ev.target.value })} error={rowError(idx, 'rent')} />
+              <Checkbox label="Air-conditioned" checked={r.ac} onChange={(ev) => updateRow(idx, { ac: ev.target.checked })} />
+              <Checkbox label="Attached bathroom" checked={r.attachedBath} onChange={(ev) => updateRow(idx, { attachedBath: ev.target.checked })} />
+            </div>
+          </div>
+        ))}
       </div>
+      <Button variant="secondary" className="mt-4" icon={<Plus className="size-4" />} onClick={addRow}>Add another room</Button>
     </Modal>
   );
 }

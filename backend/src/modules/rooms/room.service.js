@@ -63,6 +63,39 @@ export async function create(auth, input, actorName = "Staff") {
   });
 }
 
+export async function createBulk(auth, input, actorName = "Staff") {
+  requireRole(auth, "owner", "manager");
+  const propertyId = auth.role === "owner" ? input.propertyId : auth.propertyId;
+  if (!propertyId) throw invalid({ propertyId: "Property is required" });
+  await assertPropertyAccess(auth, propertyId);
+
+  const numbers = input.rooms.map((r) => r.number);
+  const dupe = numbers.find((n, i) => numbers.indexOf(n) !== i);
+  if (dupe) throw invalid({ rooms: `Room number "${dupe}" is listed more than once` });
+
+  // Room and its beds are one unit: either every room (and its beds) exist, or none do.
+  return prisma.$transaction(async (tx) => {
+    const totalBeds = input.rooms.reduce((sum, r) => sum + BEDS_PER_TYPE[r.type], 0);
+    await assertWithinPlan(tx, auth.orgId, { beds: totalBeds });
+    const rooms = [];
+    for (const r of input.rooms) {
+      const room = await tx.room.create({
+        data: {
+          propertyId, number: r.number, floor: r.floor, type: r.type, rent: r.rent,
+          ac: !!r.ac, attachedBath: !!r.attachedBath, status: r.status ?? "active",
+        },
+      });
+      await tx.bed.createMany({
+        data: LABELS.slice(0, BEDS_PER_TYPE[room.type]).map((label) => ({ roomId: room.id, propertyId, label })),
+      });
+      rooms.push(room);
+    }
+    const label = rooms.length === 1 ? rooms[0].number : `${rooms.length} rooms (${rooms.map((r) => r.number).join(", ")})`;
+    await logActivity(tx, auth, actorName, "room", `Room(s) added: ${label}`, propertyId, "/manager/rooms");
+    return rooms;
+  });
+}
+
 export async function update(auth, id, input, actorName = "Staff") {
   requireRole(auth, "owner", "manager");
   const room = await prisma.room.findUnique({ where: { id } });
