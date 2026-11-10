@@ -96,6 +96,51 @@ describe("room creation and capacity", () => {
     });
   }
 
+  test("creating multiple rooms in one request creates every room and its beds", async () => {
+    const owner = await as(w.users.owner);
+    const res = await owner.post("/rooms/bulk", {
+      propertyId: w.A.id,
+      rooms: [
+        { number: "T-B1", floor: 3, type: "single", rent: 8000 },
+        { number: "T-B2", floor: 3, type: "double", rent: 9000 },
+      ],
+    });
+    assert.equal(res.status, 201);
+    assert.equal(res.body.data.length, 2);
+    const r1 = await roomByNumber(owner, w.A.id, "T-B1");
+    const r2 = await roomByNumber(owner, w.A.id, "T-B2");
+    assert.equal(r1.beds.length, 1);
+    assert.equal(r2.beds.length, 2);
+  });
+
+  test("a bulk request where one room's number repeats is rejected and creates nothing", async () => {
+    const owner = await as(w.users.owner);
+    const before = await prisma.room.count();
+    const res = await owner.post("/rooms/bulk", {
+      propertyId: w.A.id,
+      rooms: [
+        { number: "T-C1", floor: 3, type: "single", rent: 8000 },
+        { number: "T-C1", floor: 3, type: "single", rent: 8000 },
+      ],
+    });
+    assert.equal(res.status, 422);
+    assert.equal(await prisma.room.count(), before);
+  });
+
+  test("a bulk request that collides with an existing room number is rejected and creates nothing", async () => {
+    const owner = await as(w.users.owner);
+    const before = await prisma.room.count();
+    const res = await owner.post("/rooms/bulk", {
+      propertyId: w.A.id,
+      rooms: [
+        { number: "T-D1", floor: 3, type: "single", rent: 8000 },
+        { number: "101", floor: 1, type: "single", rent: 8000 }, // already exists
+      ],
+    });
+    assert.equal(res.status, 409);
+    assert.equal(await prisma.room.count(), before);
+  });
+
   test("[DEF-04] raising a room's type adds the extra beds", async () => {
     const owner = await as(w.users.owner);
     assert.equal((await owner.patch(`/rooms/${w.roomA2.room.id}`, { type: "double" })).status, 200);
