@@ -317,6 +317,7 @@ model User {
 
   refreshTokens RefreshToken[]
   resetTokens   PasswordResetToken[]
+  devices       Device[]
   student       StudentProfile?      @relation(fields: [studentId], references: [id])
   org           Organization         @relation(fields: [orgId], references: [id])
   property      Property?            @relation(fields: [propertyId, orgId], references: [id, orgId], onDelete: NoAction, onUpdate: NoAction)
@@ -640,8 +641,28 @@ model Notification {
   link            String?
   read            Boolean  @default(false)
   createdAt       DateTime @default(now())
+  // Set when the push dispatcher claims the row (sent, or nothing to send it to).
+  // Rows written before push existed are back-filled, so they are never pushed.
+  pushedAt        DateTime?
 
   @@index([recipientUserId, read])
+  @@index([pushedAt, createdAt])
+}
+
+// A phone that receives push notifications (mobile app). One row per Expo push
+// token; a token that moves to another account (sign out, sign in as someone
+// else) is re-pointed, never duplicated.
+model Device {
+  id         String   @id @default(uuid())
+  userId     String
+  pushToken  String   @unique
+  platform   String // "ios" | "android" — checked in SQL (Device_platform)
+  appVersion String   @default("")
+  createdAt  DateTime @default(now())
+  lastSeenAt DateTime @default(now())
+  user       User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }
 
 model ActivityLog {

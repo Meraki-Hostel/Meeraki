@@ -57,6 +57,20 @@ export const env = {
     maxMb: Number(process.env.UPLOAD_MAX_MB || 5),
     signedUrlTtl: Number(process.env.SIGNED_URL_TTL_SECONDS || 300),
   },
+  // Push notifications to the mobile app.
+  //   disabled = devices cannot register; the app hides push (production default)
+  //   console  = pushes are kept in memory and logged (development default; refused in production)
+  //   expo     = sent through the Expo Push Service (FCM + APNs)
+  push: {
+    mode: process.env.PUSH_MODE || devDefault("console"),
+    // Optional: only needed when "enhanced push security" is on for the Expo project.
+    expoAccessToken: process.env.EXPO_ACCESS_TOKEN || "",
+  },
+  // Mobile app versions. Below minVersion the app must update before it can be used.
+  mobile: {
+    minVersion: process.env.MOBILE_MIN_VERSION || "0.0.0",
+    latestVersion: process.env.MOBILE_LATEST_VERSION || process.env.MOBILE_MIN_VERSION || "0.0.0",
+  },
   // In-process scheduler (monthly charges, late fees, reminders, cleanup). Turn it
   // off when an external cron runs `npm run job <name>` instead (e.g. a host whose
   // instances sleep). Never on in tests.
@@ -72,6 +86,8 @@ export const isProd = env.nodeEnv === "production";
 const PAYMENT_MODES = ["disabled", "simulated", "razorpay"];
 const MAIL_MODES = ["disabled", "console", "resend"];
 const STORAGE_MODES = ["disabled", "local", "r2"];
+const PUSH_MODES = ["disabled", "console", "expo"];
+const SEMVER = /^\d+\.\d+\.\d+$/;
 const PLACEHOLDER_SECRET = /^replace_me|^changeme|^secret$|^test$/i;
 
 export function configProblems(e = env, production = isProd) {
@@ -92,11 +108,18 @@ export function configProblems(e = env, production = isProd) {
       if (!v) problems.push(`${name} is required when STORAGE_MODE=r2`);
     }
   }
+  if (!PUSH_MODES.includes(e.push.mode)) problems.push(`PUSH_MODE must be one of: ${PUSH_MODES.join(", ")}`);
+  for (const [name, v] of [["MOBILE_MIN_VERSION", e.mobile.minVersion], ["MOBILE_LATEST_VERSION", e.mobile.latestVersion]]) {
+    if (!SEMVER.test(v)) problems.push(`${name} must look like 1.2.3`);
+  }
   if (!(e.storage.maxMb > 0 && e.storage.maxMb <= 50)) problems.push("UPLOAD_MAX_MB must be between 1 and 50");
   if (!production) return problems;
 
   if (e.mail.mode === "console") {
     problems.push("MAIL_MODE=console only prints emails to the log and is not allowed in production (use resend, or disabled)");
+  }
+  if (e.push.mode === "console") {
+    problems.push("PUSH_MODE=console only logs push notifications and is not allowed in production (use expo, or disabled)");
   }
   if (e.storage.mode === "local") {
     problems.push("STORAGE_MODE=local keeps files on the server's disk and is not allowed in production (use r2, or disabled)");

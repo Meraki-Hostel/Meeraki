@@ -101,6 +101,8 @@ export async function logoutAll(auth) {
   await prisma.$transaction([
     prisma.user.update({ where: { id: auth.userId }, data: { tokenVersion: { increment: 1 } } }),
     prisma.refreshToken.updateMany({ where: { userId: auth.userId, revokedAt: null }, data: { revokedAt: new Date() } }),
+    // Signed out everywhere = no more pushes to any of this user's phones.
+    prisma.device.deleteMany({ where: { userId: auth.userId } }),
   ]);
 }
 

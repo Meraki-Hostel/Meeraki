@@ -8,7 +8,8 @@ export async function listNotifications(auth, filters = {}) {
   if (filters.category) where.category = filters.category;
   if (filters.unreadOnly === "true" || filters.unreadOnly === true) where.read = false;
   const rows = await prisma.notification.findMany({ where, orderBy: { createdAt: "desc" }, take: 100 });
-  return rows.map((n) => ({ ...n, createdAt: n.createdAt.toISOString() }));
+  // pushedAt is the push outbox marker (modules/devices), not part of the Notification contract.
+  return rows.map(({ pushedAt: _pushedAt, ...n }) => ({ ...n, createdAt: n.createdAt.toISOString() }));
 }
 export async function markNotificationRead(auth, id, read) {
   // Only the recipient can change it; any other id (unknown or someone else's) is NOT_FOUND.

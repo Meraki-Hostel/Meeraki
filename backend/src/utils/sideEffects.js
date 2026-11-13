@@ -1,7 +1,10 @@
 import { prisma } from "../config/prisma.js";
+import { kickPush } from "../modules/devices/push.dispatch.js";
 
 // Activity rows and in-app notifications. Always called with the transaction
 // client (`tx`) of the change they describe, so they commit or roll back with it.
+// Push to phones is not sent from here (the transaction may still roll back):
+// kickPush() only wakes the dispatcher, which sends committed rows.
 
 export async function logActivity(tx, auth, actorName, category, message, propertyId, link) {
   const orgId = propertyId
@@ -16,6 +19,7 @@ export async function notifyUsers(tx, userIds, title, body, category, link) {
   const ids = [...new Set(userIds.filter(Boolean))];
   if (ids.length) {
     await tx.notification.createMany({ data: ids.map((recipientUserId) => ({ recipientUserId, title, body, category, link })) });
+    kickPush();
   }
 }
 
@@ -37,7 +41,10 @@ export async function notifyStaffUsers(tx, propertyId, title, body, category, ma
     ...mgrs.map((u) => ({ recipientUserId: u.id, title, body, category, link: managerLink })),
     ...owners.map((u) => ({ recipientUserId: u.id, title, body, category, link: ownerLink })),
   ];
-  if (rows.length) await tx.notification.createMany({ data: rows });
+  if (rows.length) {
+    await tx.notification.createMany({ data: rows });
+    kickPush();
+  }
 }
 
 /** The signed-in user's display name, for "recorded by" / "decided by" fields. */
