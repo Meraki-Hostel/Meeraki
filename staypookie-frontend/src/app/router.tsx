@@ -8,6 +8,7 @@ import { BrandLogo } from '@/components/brand/BrandLogo';
 import { LoginPage } from '@/features/auth/LoginPage';
 import { ForgotPasswordPage, InviteAcceptPage, ResetPasswordPage } from '@/features/auth/RecoveryPages';
 import { NotFoundPage, UnauthorizedPage } from '@/features/shared/SystemPages';
+import { PrivacyPage } from '@/features/shared/PrivacyPage';
 import { lazyNamed } from './lazy';
 import { NotAvailablePage } from '@/features/shared/NotAvailablePage';
 import { isAvailable, type Feature } from '@/lib/features';
@@ -65,6 +66,7 @@ export function AppRoutes() {
       <Route path="/invite/accept" element={<InviteAcceptPage />} />
       <Route path="/unauthorized" element={<UnauthorizedPage />} />
       <Route path="/help" element={<HelpEntry />} />
+      <Route path="/privacy" element={<PrivacyPage />} />
 
       <Route element={<RequireAuth><AppShell /></RequireAuth>}>
         <Route path="/notifications" element={page(<Shared.Notifications />)} />
