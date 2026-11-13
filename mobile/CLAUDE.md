@@ -59,4 +59,6 @@ Import alias: `@/` → `src/`.
 
 ## Release
 
+Step-by-step Play Store publishing (accounts, Firebase push, builds, listing text, Data Safety answers) is in `../docs/11-play-store-release.md`. Store art is in `store/`; app icons are generated from the web logo into `assets/`. Never commit `google-services.json`, `google-service-account.json` or keystores (gitignored).
+
 EAS profiles in `eas.json`: `development` (dev client), `preview` (internal APK/IPA), `production` (stores, auto-incremented build numbers). Bump `version` in `app.config.ts` for a store release; raise the API's `MOBILE_MIN_VERSION` only for a breaking API change.

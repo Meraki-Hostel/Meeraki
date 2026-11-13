@@ -68,6 +68,12 @@ export default function Login() {
               onPress={() => { void WebBrowser.openBrowserAsync(`${WEB_URL}/forgot-password`); }}
             />
           ) : null}
+          {WEB_URL ? (
+            <Button
+              title="Privacy policy" variant="ghost"
+              onPress={() => { void WebBrowser.openBrowserAsync(`${WEB_URL}/privacy`); }}
+            />
+          ) : null}
         </ScrollView>
       </KeyboardAvoidingView>
     </SafeAreaView>

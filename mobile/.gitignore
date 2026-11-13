@@ -40,3 +40,9 @@ yarn-error.*
 # generated native folders
 /ios
 /android
+
+# Play Store / signing secrets: never commit
+google-service-account.json
+google-services.json
+GoogleService-Info.plist
+*.keystore

@@ -50,6 +50,12 @@ export function MeScreen({ links = [], webNote }: { links?: MeLink[]; webNote?: 
           {WEB_URL ? (
             <Row title="Open StayPookie on the web" subtitle={webNote} icon="globe-outline" onPress={() => { void WebBrowser.openBrowserAsync(WEB_URL); }} />
           ) : null}
+          {WEB_URL ? (
+            <Row title="Privacy policy" icon="shield-checkmark-outline" onPress={() => { void WebBrowser.openBrowserAsync(`${WEB_URL}/privacy`); }} />
+          ) : null}
+          {WEB_URL ? (
+            <Row title="Delete my account or data" subtitle="How to ask your hostel or us" icon="trash-outline" onPress={() => { void WebBrowser.openBrowserAsync(`${WEB_URL}/privacy#deletion`); }} />
+          ) : null}
           <Row title="Sign out" icon="log-out-outline" onPress={() => confirmSignOut(false)} />
           <Row title="Sign out everywhere" icon="exit-outline" onPress={() => confirmSignOut(true)} />
         </Card>
