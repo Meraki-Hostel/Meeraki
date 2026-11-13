@@ -19,6 +19,7 @@ docs tell you *what*, *why*, and *what's left*.
 | [08-data-model.md](08-data-model.md) | Entities, glossary, API surface. |
 | [09-launch-checklist.md](09-launch-checklist.md) | Go-live checklist and dates. |
 | [10-mobile-app.md](10-mobile-app.md) | Mobile app (Expo, all roles): scope, API use, backend work, milestones. |
+| [11-play-store-release.md](11-play-store-release.md) | Publishing the app on Google Play: setup, builds, store text, declaration answers. |
 
 Companion docs at the **repo root** (read outside this planning context too):
 [`../spec.md`](../spec.md) (full product spec) and

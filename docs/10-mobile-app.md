@@ -3,6 +3,7 @@
 > **Status: built, not yet released.** `mobile/` has every screen below for all
 > three roles, and the backend work (B1–B4) is done with tests. Still ahead:
 > running it on real phones, push credentials, and the store release (M5).
+> Publishing steps: [11-play-store-release.md](11-play-store-release.md).
 > Items marked **[review]** still need a decision. Update this doc in the same
 > PR as the code that changes it.
 
