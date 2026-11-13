@@ -7,6 +7,7 @@ import { generateRent, applyLateFees } from "../modules/payments/charge.service.
 import { purgeAbandoned } from "../modules/uploads/upload.service.js";
 import { snapshotMonth } from "../modules/analytics/analytics.service.js";
 import { storageEnabled } from "../services/storage.js";
+import { dispatchPending } from "../modules/devices/push.dispatch.js";
 
 const inr = (n) => `₹${Number(n).toLocaleString("en-IN")}`;
 const DAY = 864e5;
@@ -58,12 +59,18 @@ export const JOBS = {
   "due-reminders": { cron: "0 9 * * *", slot: () => todayISO(), run: () => sendDueReminders().then((sent) => ({ sent })) },
   "monthly-snapshot": { cron: "0 2 1 * *", slot: () => currentPeriod(), run: () => snapshotMonth(previousPeriod(currentPeriod())) },
   cleanup: { cron: "0 3 * * *", slot: () => todayISO(), run: cleanup },
+  // Not scheduled here: the API process sweeps every 15 s on its own. This entry is
+  // for hosts that sleep idle instances (external cron, `npm run job push`). It
+  // claims no slot and keeps no JobRun row — overlapping runs are safe and it may
+  // run every minute.
+  push: { cron: null, slot: null, run: () => dispatchPending() },
 };
 
 /** Claims the run slot (one instance wins), runs the job and records the outcome. */
 export async function runJob(name, { force = false } = {}) {
   const job = JOBS[name];
   if (!job) throw new Error(`Unknown job "${name}". Known: ${Object.keys(JOBS).join(", ")}`);
+  if (!job.slot) return job.run();
   if (!force) {
     const claimed = await prisma.$executeRaw`
       INSERT INTO "Counter" ("key", "value") VALUES (${`job:${name}:${job.slot()}`}, 1) ON CONFLICT DO NOTHING`;
@@ -84,13 +91,13 @@ let tasks = [];
 export async function startScheduler() {
   if (!env.jobs.enabled) return;
   const cron = (await import("node-cron")).default;
-  tasks = Object.entries(JOBS).map(([name, job]) =>
+  tasks = Object.entries(JOBS).filter(([, job]) => job.cron).map(([name, job]) =>
     cron.schedule(job.cron, () => {
       runJob(name).catch((err) => console.error(`[job ${name}] failed:`, err.message));
     }, { timezone: env.timezone }));
   // Catch up after a restart or deploy: billing for today must not wait until tomorrow.
   for (const name of ["generate-rent", "late-fees"]) runJob(name).catch((err) => console.error(`[job ${name}] failed:`, err.message));
-  console.log(`Scheduler on (${env.timezone}): ${Object.keys(JOBS).join(", ")}`);
+  console.log(`Scheduler on (${env.timezone}): ${Object.keys(JOBS).filter((n) => JOBS[n].cron).join(", ")}`);
 }
 export function stopScheduler() {
   for (const t of tasks) t.stop();

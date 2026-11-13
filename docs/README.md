@@ -18,6 +18,7 @@ docs tell you *what*, *why*, and *what's left*.
 | [07-getting-started.md](07-getting-started.md) | How to run the app locally. |
 | [08-data-model.md](08-data-model.md) | Entities, glossary, API surface. |
 | [09-launch-checklist.md](09-launch-checklist.md) | Go-live checklist and dates. |
+| [10-mobile-app.md](10-mobile-app.md) | Mobile app (Expo, all roles): scope, API use, backend work, milestones. |
 
 Companion docs at the **repo root** (read outside this planning context too):
 [`../spec.md`](../spec.md) (full product spec) and
@@ -30,4 +31,4 @@ Companion docs at the **repo root** (read outside this planning context too):
 - **Made a non-obvious call?** One line in [06-decisions.md](06-decisions.md).
 - **Target changed?** Update [01-vision.md](01-vision.md).
 
-_Last reviewed: 2026-11-08_
+_Last reviewed: 2026-11-13_

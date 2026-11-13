@@ -143,6 +143,7 @@ export interface IPropertyService {
 export interface IRoomService {
   list(filters?: { propertyId?: ID }): Promise<RoomWithBeds[]>;
   create(input: RoomInput): Promise<Room>;
+  createBulk(inputs: RoomInput[]): Promise<Room[]>;
   update(id: ID, input: Partial<RoomInput>): Promise<Room>;
   setBedStatus(bedId: ID, status: Exclude<BedStatus, 'occupied'>, reason?: string): Promise<Bed>;
   assignBed(studentId: ID, bedId: ID): Promise<void>;

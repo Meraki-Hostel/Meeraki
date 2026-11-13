@@ -14,9 +14,9 @@ npm run build            # prisma generate + migrate deploy (used by deploy host
 npm start
 ```
 
-Needs `.env` (copy `.env.example`): `DATABASE_URL`, `DIRECT_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `CORS_ORIGINS`, `PAYMENT_MODE`. Also used: `APP_URL` (links in invitation/reset emails), `PUBLIC_API_URL` (local-storage upload links), `MAIL_MODE`/`MAIL_FROM`/`RESEND_API_KEY`, `STORAGE_MODE`/`STORAGE_LOCAL_DIR`/`R2_*`/`UPLOAD_MAX_MB`/`SIGNED_URL_TTL_SECONDS`, `JOBS_ENABLED`. `src/config/env.js` throws on missing required vars and refuses unsafe combinations in production (see its `configProblems()`) — add new vars there and to `.env.example`.
+Needs `.env` (copy `.env.example`): `DATABASE_URL`, `DIRECT_URL`, `JWT_ACCESS_SECRET`, `JWT_REFRESH_SECRET`, `CORS_ORIGINS`, `PAYMENT_MODE`. Also used: `APP_URL` (links in invitation/reset emails), `PUBLIC_API_URL` (local-storage upload links), `MAIL_MODE`/`MAIL_FROM`/`RESEND_API_KEY`, `PUSH_MODE`/`EXPO_ACCESS_TOKEN`, `MOBILE_MIN_VERSION`/`MOBILE_LATEST_VERSION`, `STORAGE_MODE`/`STORAGE_LOCAL_DIR`/`R2_*`/`UPLOAD_MAX_MB`/`SIGNED_URL_TTL_SECONDS`, `JOBS_ENABLED`. `src/config/env.js` throws on missing required vars and refuses unsafe combinations in production (see its `configProblems()`) — add new vars there and to `.env.example`.
 
-Tests (`node --test` + supertest, 21 files / 300+ tests) run against a disposable local Postgres, never `backend/.env`:
+Tests (`node --test` + supertest, 22 files / 340+ tests) run against a disposable local Postgres, never `backend/.env`:
 
 ```bash
 npm run test:db:up       # starts container staypookie-test-pg on 127.0.0.1:55432 and applies migrations (needs Docker)
@@ -34,13 +34,13 @@ src/app.js               express setup: helmet, CORS allowlist, json, rate limit
 src/routes/index.js      mounts the core modules; src/routes/modules.js auto-mounts the rest
 src/modules/<name>/      <name>.routes.js · .validation.js (Zod) · .controller.js · .service.js
 src/middleware/          authenticate (sets req.auth), validate(schema, source), errorHandler, rateLimit
-src/services/            mail.js (console/Resend), storage.js (local/Cloudflare R2)
+src/services/            mail.js (console/Resend), storage.js (local/Cloudflare R2), push.js (console/Expo)
 src/jobs/                scheduled jobs (see below) + cli.js for running one by hand
 src/utils/               ApiError, respond.ok, asyncHandler, scope, money, ledger, tokens, counters, sideEffects
 prisma/schema.prisma     models + enums; migrations/ committed
 ```
 
-22 modules are mounted: auth, invitations, properties, rooms (+ beds), students, payments (+ charges, refunds), settings, analytics, uploads, misc (activity, notifications), and — all wired, none mocked — complaints, leave, visitors, maintenance, inventory, announcements, events, staff, feedback, documents, search, emergency.
+24 modules are mounted: devices (mobile push) and app (public `/app/config` for the mobile app), auth, invitations, properties, rooms (+ beds), students, payments (+ charges, refunds), settings, analytics, uploads, misc (activity, notifications), and — all wired, none mocked — complaints, leave, visitors, maintenance, inventory, announcements, events, staff, feedback, documents, search, emergency.
 
 ## Module recipe (follow auth/payments as examples)
 
@@ -79,6 +79,7 @@ prisma/schema.prisma     models + enums; migrations/ committed
 
 - Mail (`MAIL_MODE`): `console` (dev, logs instead of sending), `resend` (needs `RESEND_API_KEY` + verified domain), `disabled` (prod default; email-dependent features say so, and an invitation link is still shown to the admin who sent it).
 - Files (`STORAGE_MODE`): `local` (dev only, under `STORAGE_LOCAL_DIR`), `r2` (Cloudflare R2, presigned upload/download URLs, see `README.md`), `disabled` (prod default; uploads say "not set up").
+- Push (`PUSH_MODE`): `console` (dev, kept in `pushOutbox` and logged), `expo` (Expo Push Service), `disabled` (prod default; `POST /devices` answers `NOT_CONFIGURED`). Push is an **outbox over `Notification`**: never send a push from inside a transaction. `utils/sideEffects.js` only calls `kickPush()`; `modules/devices/push.dispatch.js` claims committed rows with `pushedAt IS NULL` (`FOR UPDATE SKIP LOCKED`, so instances never double-send), sends, drops `DeviceNotRegistered` tokens, and releases the rows if the whole request fails. It runs ~1.5 s after a kick and on a 15 s sweep in the API process; `npm run job push` does one pass for hosts that sleep. Rows older than an hour are never pushed. Raw SQL times are bound as naive UTC text cast to `timestamp` — a bound JS Date or `now()` is shifted by the session time zone.
 - `JOBS_ENABLED=true` runs scheduled jobs inline in this process (rent generation on the 1st, late fees, due reminders at -2/+3/+10 days, monthly analytics snapshots, abandoned-upload cleanup). Set it `false` on a host that sleeps idle instances and run `npm run job <name>` from an external cron instead.
 
 ## Integrity rules that live only in SQL
@@ -87,7 +88,7 @@ Prisma cannot express these, so they are in migrations, not `schema.prisma` — 
 
 - Referential/state: `Bed_occupied_iff_student`, `StudentProfile_moved_out_has_no_bed`, `Payment_one_pending_per_charge` (partial unique index — backs the "can't double-start pay-now" guard; see `payment.service.js`).
 - Non-negative/positive amounts: `Payment_amount_positive`, `Refund_amount_positive`, `RentCharge_amount_nonnegative`, `InventoryItem_amounts_nonnegative`, `InventoryTransaction_quantity_positive`, `MaintenanceTicket_costs_nonnegative`, `Upload_size_positive`, `HostelEvent_capacity_nonnegative`.
-- Shape: `LeaveRequest_dates_ordered`, `Feedback_rating_range`, `Announcement_audience_type`, `InventoryTransaction_type`, `Upload_purpose`.
+- Shape: `LeaveRequest_dates_ordered`, `Feedback_rating_range`, `Announcement_audience_type`, `InventoryTransaction_type`, `Upload_purpose`, `Device_platform`.
 
 ## Deploy
 

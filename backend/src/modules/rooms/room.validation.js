@@ -8,6 +8,10 @@ export const createSchema = z.object({
   status: z.enum(["active", "maintenance"]).optional(),
 });
 export const updateSchema = createSchema.partial();
+export const createBulkSchema = z.object({
+  propertyId: z.string().optional(),
+  rooms: z.array(createSchema.omit({ propertyId: true })).min(1).max(50),
+});
 export const listSchema = z.object({ propertyId: z.string().optional() });
 export const bedStatusSchema = z.object({
   status: z.enum(["available", "unavailable"]), reason: z.string().optional(),

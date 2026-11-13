@@ -5,6 +5,16 @@ re-argue settled questions.
 
 ---
 
+### D-0006 — Mobile app: Expo, one app for all roles
+
+- **Status:** Decided (13 Nov). Plan in [10-mobile-app.md](10-mobile-app.md).
+- **Context:** the API was built mobile-ready; users want a phone app, not just the web.
+- **Decision:** React Native + Expo in a new `mobile/` folder; one app, role picked at login; students first, then managers, then owners. Setup-heavy screens (admission wizard, payouts KYC, plans, settings) stay on the web for v1.
+- **Why:** same language as the web app, so the contract types carry over by copy; one codebase for both stores; Flutter would mean re-modelling the contract in Dart.
+- **Consequence:** contract files are copied into `mobile/src/contract/` with a drift check; push notifications need a new `Device` table (migration needs approval).
+
+---
+
 ### D-0005 — Launch date and scope
 
 - **Status:** Decided. Public go-live **11 Nov 2026, 1 PM IST**; team cutoff **10 Nov, 11:59 PM IST**.
@@ -53,4 +63,4 @@ _New entry template:_
 - **Consequence:** what it means going forward
 ```
 
-_Last reviewed: 2026-11-08_
+_Last reviewed: 2026-11-13_

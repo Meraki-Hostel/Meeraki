@@ -115,9 +115,17 @@ Emergency     GET/POST /emergency · POST /emergency/:id/acknowledge · /emergen
 Settings      GET/PATCH /settings · GET/POST /settings/plan
 Analytics     GET /analytics/owner-overview · /trends · /property-comparison · /manager-overview
 Activity      GET /activity · GET /notifications · PATCH /notifications/:id · /notifications/read-all
+Devices       GET/POST /devices · DELETE /devices/:pushToken   (mobile push; NOT_CONFIGURED when PUSH_MODE=disabled)
+App           GET /app/config   (public: { minVersion, latestVersion, pushEnabled, onlinePayments })
 Search        GET /search?q=
 Health        GET /health (liveness) · GET /ready (database reachable)
 ```
+
+`/devices` and `/app/config` are used only by the mobile app; their shapes are
+in `mobile/src/contract/mobile.ts`. `POST /devices` takes
+`{ pushToken: "ExponentPushToken[…]", platform: "ios" | "android", appVersion? }`
+and is idempotent; a push carries `data: { notificationId, category, link }`,
+where `link` is the same web path the in-app notification has.
 
 For the exact request/response TypeScript shape behind any of these, look up
 the matching service interface in `interfaces.ts` (e.g. `/students` ↔
@@ -152,8 +160,8 @@ deploy applies that migration automatically via `prisma migrate deploy`.
 ## Not included yet
 
 - Two-step sign-in (OTP): the setting is stored but not enforced.
-- SMS notifications (Indian bulk SMS needs DLT registration first); email and
-  in-app notifications work.
+- SMS notifications (Indian bulk SMS needs DLT registration first); email,
+  in-app and mobile push notifications work.
 - Charging hostel owners for plans: limits are enforced, nothing is billed.
 - GST tax invoices: receipts are payment receipts, not tax invoices.
 

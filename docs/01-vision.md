@@ -36,7 +36,7 @@ finished ahead of plan. What's left is proving it in the pilot:
 
 1. **Core occupancy & money — done.**
 2. **Daily operations — done** (complaints, leave, visitors, maintenance, inventory, staff, announcements, events, feedback, documents, settings, search, emergency).
-3. **Mobile — later.** The API is already mobile-ready; wrap the student experience once the web product is proven.
+3. **Mobile — built, not yet released.** One Expo app for students, managers and owners on the existing API — see [10-mobile-app.md](10-mobile-app.md).
 
 Four **planned features** come after: postpaid rent, printable biodata,
 Google-Drive backup, and a landing-page builder (last). Details in
@@ -52,8 +52,8 @@ Google-Drive backup, and a landing-page builder (last). Details in
 
 ## Explicitly not the target (for now)
 
-No native mobile app · no accounting/GST/payroll · no multi-language (English
+No accounting/GST/payroll · no multi-language (English
 first) · not a marketplace — we manage existing hostels, not help students
 find them.
 
-_Last reviewed: 2026-11-08_
+_Last reviewed: 2026-11-13_

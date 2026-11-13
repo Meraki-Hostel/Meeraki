@@ -23,7 +23,7 @@ const runFile = (file, overrides) => spawnSync(process.execPath, [file], {
 const PROD_OK = {
   NODE_ENV: "production", PAYMENT_MODE: "razorpay", JWT_ACCESS_SECRET: STRONG, JWT_REFRESH_SECRET: STRONG + "y",
   CORS_ORIGINS: "https://app.example.test", RAZORPAY_KEY_ID: "rzp_test_abc", RAZORPAY_KEY_SECRET: "s", RAZORPAY_WEBHOOK_SECRET: "w",
-  MAIL_MODE: "disabled", STORAGE_MODE: "disabled",
+  MAIL_MODE: "disabled", STORAGE_MODE: "disabled", PUSH_MODE: "disabled",
 };
 
 before(resetDb);
@@ -33,6 +33,19 @@ describe("start-up guards", () => {
   test("a properly configured production environment boots", () => {
     const r = boot(PROD_OK);
     assert.equal(r.status, 0, r.stderr);
+  });
+
+  test("PUSH_MODE=console is refused in production; expo and disabled boot", () => {
+    const bad = boot({ ...PROD_OK, PUSH_MODE: "console" });
+    assert.notEqual(bad.status, 0);
+    assert.match(bad.stderr, /PUSH_MODE=console/);
+    for (const mode of ["expo", "disabled"]) assert.equal(boot({ ...PROD_OK, PUSH_MODE: mode }).status, 0, mode);
+  });
+
+  test("mobile versions must look like 1.2.3", () => {
+    const r = boot({ ...PROD_OK, PUSH_MODE: "disabled", MOBILE_MIN_VERSION: "v1" });
+    assert.notEqual(r.status, 0);
+    assert.match(r.stderr, /MOBILE_MIN_VERSION/);
   });
 
   test("local development with the .env.example defaults still boots", () => {

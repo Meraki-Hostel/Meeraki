@@ -29,6 +29,7 @@ export function api(token) {
     patch: (p, body = {}) => auth(request(app).patch(BASE + p).send(body)),
     put: (p, body = {}) => auth(request(app).put(BASE + p).send(body)),
     delete: (p) => auth(request(app).delete(BASE + p)),
+    del: (p) => auth(request(app).delete(BASE + p)), // same as delete; used by devices.test.js
   };
 }
 

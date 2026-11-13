@@ -33,6 +33,17 @@ cp .env.example .env     # VITE_API_BASE_URL=http://localhost:4000/api/v1
 npm run dev
 ```
 
+### 3. Mobile app (optional)
+
+```bash
+cd mobile && npm install && cp .env.example .env
+# .env: EXPO_PUBLIC_API_BASE_URL=http://<your LAN IP>:4000/api/v1  (not localhost)
+npm start
+```
+
+Expo Go works for most screens; Razorpay and push need a dev build
+(`npm run android`). Details in [`mobile/README.md`](../mobile/README.md).
+
 ## Demo logins (after `npm run db:seed`)
 
 | Role | Email | Password |
@@ -57,6 +68,8 @@ seed refuses to run in production. Use a separate dev database and
 npm run typecheck && npm run lint && npm run build
 # backend
 npm test
+# mobile
+npm run verify
 ```
 
 ## Prototype (demo only)
@@ -64,4 +77,4 @@ npm test
 `prototype/` is mock-data-only. `cd prototype && npm install && npm run dev` —
 never point it at the real API.
 
-_Last reviewed: 2026-11-08_
+_Last reviewed: 2026-11-13_

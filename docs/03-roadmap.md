@@ -31,6 +31,12 @@ _Source of truth: `staypookie-frontend/src/lib/features.ts` (`AVAILABLE`)._
 
 Not done until step 6, clicked through in the real app.
 
+## Mobile app
+
+One Expo app for all three roles — plan, scope and milestones (M0–M5) in
+[10-mobile-app.md](10-mobile-app.md). Built (all roles, push backend done);
+next is testing on real phones and the store release.
+
 ## Planned features (post-launch, roughly in this order)
 
 - **PF-1 — Postpaid rent:** a grace period (5 days) where a manager can let a
@@ -46,4 +52,4 @@ Not done until step 6, clicked through in the real app.
   templates, public page at `staypookie.com/hostel/<name>`. [review] plan
   tier, custom domains, template editability.
 
-_Last reviewed: 2026-11-08_
+_Last reviewed: 2026-11-13_
