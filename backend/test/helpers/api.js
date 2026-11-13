@@ -27,6 +27,8 @@ export function api(token) {
     get: (p, query = {}) => auth(request(app).get(BASE + p).query(query)),
     post: (p, body = {}) => auth(request(app).post(BASE + p).send(body)),
     patch: (p, body = {}) => auth(request(app).patch(BASE + p).send(body)),
+    put: (p, body = {}) => auth(request(app).put(BASE + p).send(body)),
+    delete: (p) => auth(request(app).delete(BASE + p)),
   };
 }
 

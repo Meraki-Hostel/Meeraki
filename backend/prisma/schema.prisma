@@ -130,6 +130,47 @@ enum RefundStatus {
   failed
 }
 
+// Where an owner's payout account stands with the gateway. Only `active` accounts
+// receive online rent.
+//   draft               saved here, gateway onboarding not finished (re-submit to resume)
+//   submitted           sent to the gateway, verification not started
+//   under_review        gateway is verifying the owner (usually 1-2 working days)
+//   needs_clarification gateway needs a correction (see kycNote)
+//   active              verified; rent can be paid out
+//   rejected / suspended gateway refused or paused the account
+enum PayoutKycStatus {
+  draft
+  submitted
+  under_review
+  needs_clarification
+  active
+  rejected
+  suspended
+}
+
+enum PayoutBusinessType {
+  individual
+  proprietorship
+  partnership
+  llp
+  private_limited
+  public_limited
+  trust
+  society
+  ngo
+}
+
+// created   = split registered with the order; waiting for the payment to be captured
+// processed = the owner's share was transferred
+// failed    = the gateway could not transfer it (staff are notified)
+// reversed  = taken back because the payment was refunded
+enum TransferStatus {
+  created
+  processed
+  failed
+  reversed
+}
+
 enum RefundMethod {
   gateway
   manual
@@ -290,6 +331,7 @@ model Organization {
   staff       StaffMember[]
   invitations Invitation[]
   activity    ActivityLog[]
+  payoutAccounts PayoutAccount[]
 }
 
 // ── Identity ─────────────────────────────────────────────────────────────────
@@ -393,6 +435,8 @@ model Property {
   pincode        String
   phone          String
   managerStaffId String?
+  // Where this hostel's online rent is paid out. Null = online payment is not set up.
+  payoutAccountId String?
   baseRent       Int
   amenities      String[]
   openedOn       DateTime
@@ -406,6 +450,7 @@ model Property {
   charges       RentCharge[]
   payments      Payment[]
   org           Organization        @relation(fields: [orgId], references: [id])
+  payoutAccount PayoutAccount?      @relation(fields: [payoutAccountId, orgId], references: [id, orgId])
   users         User[]
   staff         StaffMember[]
   invitations   Invitation[]
@@ -426,6 +471,7 @@ model Property {
   @@unique([id, orgId]) // target of the same-org composite relations
   @@index([status])
   @@index([orgId])
+  @@index([payoutAccountId])
 }
 
 model Room {
@@ -578,12 +624,17 @@ model Payment {
   // Set for online (gateway) payments; lets webhooks reconcile idempotently.
   gatewayOrderId   String?       @unique
   gatewayPaymentId String?
+  // Online payments are split to the hostel's payout account at the gateway.
+  payoutAccountId   String?
+  gatewayTransferId String?         @unique
+  transferStatus    TransferStatus?
   createdAt        DateTime      @default(now())
 
   charge   RentCharge     @relation(fields: [chargeId], references: [id], onDelete: Cascade)
   student  StudentProfile @relation(fields: [studentId], references: [id], onDelete: Cascade)
   property Property       @relation(fields: [propertyId], references: [id], onDelete: Cascade)
   refunds  Refund[]
+  payoutAccount PayoutAccount? @relation(fields: [payoutAccountId], references: [id])
   // Also in SQL only (Prisma cannot express it): unique partial index
   // "Payment_one_pending_per_charge" on (chargeId) WHERE status = 'pending'.
 
@@ -1003,4 +1054,38 @@ model JobRun {
   error      String?
 
   @@index([name, startedAt])
+}
+
+// An owner's bank account that receives online rent (Razorpay Route linked account).
+// Belongs to the organization; each property points at one (Property.payoutAccountId),
+// so one owner can use a different account per hostel. The full account number and
+// PAN are sent to the gateway and never stored here, only the last four digits.
+// The composite key (id, orgId) lets the database refuse a property pointing at
+// another organization's account.
+model PayoutAccount {
+  id                   String             @id @default(uuid())
+  orgId                String
+  label                String
+  businessType         PayoutBusinessType
+  legalName            String
+  contactName          String
+  email                String
+  phone                String
+  bankHolderName       String
+  bankLast4            String
+  ifsc                 String
+  kycStatus            PayoutKycStatus    @default(draft)
+  kycNote              String?
+  gatewayAccountId     String?            @unique
+  gatewayStakeholderId String?
+  gatewayProductId     String?
+  createdAt            DateTime           @default(now())
+  updatedAt            DateTime           @updatedAt
+
+  org        Organization @relation(fields: [orgId], references: [id])
+  properties Property[]
+  payments   Payment[]
+
+  @@unique([id, orgId])
+  @@index([orgId])
 }

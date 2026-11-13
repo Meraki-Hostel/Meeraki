@@ -38,6 +38,18 @@ export async function makeProperty(org, code, name = `Hostel ${code}`) {
   });
 }
 
+/** A verified payout account (online rent can be paid out to it). */
+export function makePayoutAccount(org, extra = {}) {
+  const i = n();
+  return prisma.payoutAccount.create({
+    data: {
+      orgId: org.id, label: `Account ${i}`, businessType: "individual", legalName: "Test Owner", contactName: "Test Owner",
+      email: `payout${i}@example.test`, phone: "9876543210", bankHolderName: "Test Owner", bankLast4: "4321", ifsc: "HDFC0001234",
+      kycStatus: "active", gatewayAccountId: `acc_test_${i}`, gatewayProductId: `acc_prd_test_${i}`, ...extra,
+    },
+  });
+}
+
 export async function makeRoom(property, number, type = "double", labels = ["A", "B"]) {
   const room = await prisma.room.create({
     data: { propertyId: property.id, number, floor: 1, type, rent: 9500, ac: false, attachedBath: false },

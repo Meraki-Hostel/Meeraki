@@ -2,14 +2,19 @@ import "./helpers/env.js";
 import crypto from "node:crypto";
 import { describe, test, beforeEach, afterEach, after } from "node:test";
 import assert from "node:assert/strict";
-import { prisma, resetDb, seedWorld, disconnect, makeCharge } from "./helpers/db.js";
+import { prisma, resetDb, seedWorld, disconnect, makeCharge, makePayoutAccount } from "./helpers/db.js";
 import { as, rawRequest } from "./helpers/api.js";
 import { WEBHOOK_SECRET } from "./helpers/env.js";
 import { env } from "../src/config/env.js";
 import { todayISO } from "../src/utils/money.js";
 
 let w;
-beforeEach(async () => { await resetDb(); w = await seedWorld(); env.payments.mode = "simulated"; });
+beforeEach(async () => {
+  await resetDb(); w = await seedWorld(); env.payments.mode = "simulated";
+  // Hostel A can take online rent: it has a verified payout account.
+  w.accountA = await makePayoutAccount(w.org, { label: "Hostel A account" });
+  await prisma.property.update({ where: { id: w.A.id }, data: { payoutAccountId: w.accountA.id } });
+});
 after(disconnect);
 
 const chargeOf = async (client, id) => {
@@ -118,6 +123,8 @@ function stubGateway() {
     if (String(url).startsWith("https://api.razorpay.com/")) {
       const body = JSON.parse(init.body);
       const order = { id: `order_test_${orders.length + 1}`, amount: body.amount, currency: "INR", receipt: body.receipt };
+      if (body.transfers) order.transfers = body.transfers.map((t, i) => ({ id: `trf_test_${orders.length + 1}_${i}`, recipient: t.account, amount: t.amount, status: "created" }));
+      order.requested = body;
       orders.push(order);
       return new Response(JSON.stringify(order), { status: 200, headers: { "content-type": "application/json" } });
     }

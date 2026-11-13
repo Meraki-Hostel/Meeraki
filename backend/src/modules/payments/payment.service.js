@@ -7,6 +7,7 @@ import { ledgerRows, balanceOf, countedRefund } from "../../utils/ledger.js";
 import { nextValue, pad } from "../../utils/counters.js";
 import { logActivity, notifyStudentUsers, notifyStaffUsers } from "../../utils/sideEffects.js";
 import { createOrder, fetchPayment, refundPayment, verifyCheckoutSignature } from "./payment.gateway.js";
+import { activeAccountFor } from "../payouts/payout.service.js";
 
 const inr = (n) => `₹${Number(n).toLocaleString("en-IN")}`;
 
@@ -250,16 +251,29 @@ export async function payNow(auth, actorName, chargeId, method) {
     const balance = await balanceOf(prisma, charge);
     if (balance <= 0) throw conflict("This due is already paid.");
 
-    // Reuse the open order when it is still for the right amount.
+    // Rent is paid out to the hostel's own payout account. With none set up and
+    // verified there is nowhere to send the money, and it must never fall back to
+    // the platform's account: the student is told to pay at the office instead.
+    const account = await activeAccountFor(charge.propertyId);
+    if (!account) {
+      throw notConfigured("Online payment is not set up for your hostel yet. Pay at the office and the manager will record it.");
+    }
+
+    // Reuse the open order when it is still for the right amount and the right account.
     const open = await prisma.payment.findFirst({ where: { chargeId: charge.id, status: "pending" } });
-    if (open && open.amount === balance) return pendingResponse(open.gatewayOrderId, balance);
-    if (open) await prisma.payment.updateMany({ where: { id: open.id, status: "pending" }, data: { status: "failed", note: "Superseded: balance changed before payment" } });
+    if (open && open.amount === balance && open.payoutAccountId === account.id) return pendingResponse(open.gatewayOrderId, balance);
+    if (open) await prisma.payment.updateMany({ where: { id: open.id, status: "pending" }, data: { status: "failed", note: "Superseded: balance or payout account changed before payment" } });
 
     const order = await createOrder({
       amountRupees: balance,
       receipt: `chg_${charge.id}`,
       notes: { chargeId: charge.id, studentId: charge.studentId, propertyId: charge.propertyId, method },
+      transfer: { accountId: account.gatewayAccountId, notes: { chargeId: charge.id, propertyId: charge.propertyId } },
     });
+    // The order must carry the split. If the gateway did not echo one, the student
+    // could pay into the platform account alone, so refuse to hand the order out.
+    const transfer = order.transfers?.find((t) => t.recipient === account.gatewayAccountId) ?? null;
+    if (!transfer?.id) throw conflict("Could not set up the payment for this hostel. Nothing was charged. Try again shortly.");
     try {
       await prisma.payment.create({
         data: {
@@ -267,6 +281,7 @@ export async function payNow(auth, actorName, chargeId, method) {
           amount: balance, method: gatewayMethod, paidOn: new Date(todayISO()),
           reference: `PENDING_${order.id}`, receiptNo: `PENDING-${order.id}`,
           recordedBy: actorName, note: "Awaiting gateway confirmation", gatewayOrderId: order.id,
+          payoutAccountId: account.id, gatewayTransferId: transfer.id, transferStatus: "created",
         },
       });
     } catch (err) {
@@ -439,10 +454,15 @@ export async function refund(auth, actorName, paymentId, { amount, reason, adjus
   if (!viaGateway) return refundView(row);
   // Money only moves at the gateway once our record exists.
   try {
-    const gw = await refundPayment(p.gatewayPaymentId, amount, { refundNo: row.refundNo, reason: reason.trim().slice(0, 200) });
+    // A split payment: the owner's share is taken back along with the refund.
+    const reverseTransfer = Boolean(p.gatewayTransferId) && p.transferStatus !== "failed";
+    const gw = await refundPayment(p.gatewayPaymentId, amount, { refundNo: row.refundNo, reason: reason.trim().slice(0, 200) }, { reverseTransfer });
     const resolvedStatus = gw.status === "processed" ? "processed" : gw.status === "failed" ? "failed" : "pending";
     const updated = await prisma.$transaction(async (tx) => {
       const u = await tx.refund.update({ where: { id: row.id }, data: { gatewayRefundId: gw.id, status: resolvedStatus } });
+      if (reverseTransfer && resolvedStatus !== "failed" && amount === p.amount) {
+        await tx.payment.update({ where: { id: p.id }, data: { transferStatus: "reversed" } });
+      }
       // Razorpay answered synchronously that it was never going to pay out: undo
       // the charge reduction now, same as the thrown-rejection path below.
       if (resolvedStatus === "failed" && adjustCharge) {

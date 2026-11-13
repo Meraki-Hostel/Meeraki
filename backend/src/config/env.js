@@ -32,6 +32,9 @@ export const env = {
     razorpayKeyId: process.env.RAZORPAY_KEY_ID || "",
     razorpayKeySecret: process.env.RAZORPAY_KEY_SECRET || "",
     razorpayWebhookSecret: process.env.RAZORPAY_WEBHOOK_SECRET || "",
+    // Business category sent when an owner's payout account is registered with Razorpay Route.
+    routeCategory: process.env.RAZORPAY_ROUTE_CATEGORY || "housing",
+    routeSubcategory: process.env.RAZORPAY_ROUTE_SUBCATEGORY || "rentals",
   },
   // Email for invitations, password reset and receipts.
   //   disabled = nothing is sent; features that need email say so (production default)

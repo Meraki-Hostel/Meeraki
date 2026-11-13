@@ -50,7 +50,7 @@ export async function statsForMany(properties, period = currentPeriod()) {
 }
 
 const serialize = (p) => {
-  const { createdAt, updatedAt, ...rest } = p;
+  const { createdAt, updatedAt, payoutAccountId, ...rest } = p; // payout account is managed from /payout-accounts
   return { ...rest, managerStaffId: p.managerStaffId ?? undefined, openedOn: iso(p.openedOn) };
 };
 

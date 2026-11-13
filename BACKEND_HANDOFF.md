@@ -98,6 +98,8 @@ Charges       GET/POST /charges · POST /charges/generate · PATCH /charges/:id
 Payments      GET /payments · /payments/summary · /payments/:id/receipt · /payments/:id/receipt.pdf
               POST /payments/record · /payments/reminders · /payments/pay-now · /payments/verify
               POST /payments/:id/refund · GET /refunds · POST /payments/webhook (Razorpay, raw body)
+payouts     GET/POST /payout-accounts · POST /payout-accounts/:id/resubmit · PATCH/DELETE /payout-accounts/:id
+              PUT /payout-accounts/properties/:propertyId  (owner only; body { payoutAccountId | null })
 Complaints    GET/POST /complaints · GET/PATCH /complaints/:id · POST /complaints/:id/comments
 Leave         GET/POST /leave · POST /leave/:id/decide · /leave/:id/cancel
 Visitors      GET/POST /visitors · POST /visitors/walk-in · /visitors/:id/decide · /check-in · /check-out · /cancel

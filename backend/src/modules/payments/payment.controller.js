@@ -6,6 +6,7 @@ import { actorName } from "../../utils/sideEffects.js";
 import { renderReceiptPdf } from "./receipt.pdf.js";
 import { verifyWebhookSignature } from "./payment.gateway.js";
 import { env } from "../../config/env.js";
+import { applyProductEvent, settleTransfer } from "../payouts/payout.service.js";
 
 export const listCharges = asyncHandler(async (req, res) => ok(res, await svc.listCharges(req.auth, req.query)));
 export const listPayments = asyncHandler(async (req, res) => ok(res, await svc.listPayments(req.auth, req.query)));
@@ -48,5 +49,16 @@ export const webhook = asyncHandler(async (req, res) => {
   // the only way to match a refund we lost track of after a timed-out create call.
   else if (event?.event === "refund.processed") result = await svc.settleWebhookRefund({ gatewayRefundId: refundEntity.id, refundNo: refundEntity.notes?.refundNo, status: "processed" });
   else if (event?.event === "refund.failed") result = await svc.settleWebhookRefund({ gatewayRefundId: refundEntity.id, refundNo: refundEntity.notes?.refundNo, status: "failed" });
+  // Route (owner payouts): linked-account verification and the owner's share of each payment.
+  else if (event?.event?.startsWith("product.route.")) {
+    const product = event.payload?.merchant_product;
+    result = await applyProductEvent({
+      gatewayAccountId: event.account_id || product?.entity?.merchant_id,
+      activationStatus: product?.entity?.activation_status || event.event.slice("product.route.".length),
+      requirements: product?.data?.requirements,
+    });
+  } else if (event?.event === "transfer.processed" || event?.event === "transfer.failed") {
+    result = await settleTransfer({ gatewayTransferId: event.payload?.transfer?.entity?.id, status: event.event.slice("transfer.".length) });
+  }
   res.json({ ok: true, result });
 });
