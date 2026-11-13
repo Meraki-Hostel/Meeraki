@@ -3,7 +3,7 @@ import type {
   ChargeWithBalance, Complaint, ComplaintCategory, ComplaintStatus, DocumentRecord, Feedback, FeedbackCategory, HostelEvent,
   EventCategory, EventStatus, ID, InventoryCategory, InventoryItem, InventoryTransaction, InventoryTxnType, Invitation,
   LeaveRequest, MaintenanceCategory, MaintenanceStatus, MaintenanceTicket, Notification, NotificationCategory,
-  OrganizationSettings, Payment, PaymentMethod, PendingOnlinePayment, Priority, RentCharge, Property, PropertyStatus, PropertyType, Receipt, Role, Room,
+  OrganizationSettings, Payment, PaymentMethod, PayoutAccount, PayoutBusinessType, PendingOnlinePayment, Priority, RentCharge, Property, PropertyStatus, PropertyType, Receipt, Role, Room,
   RoomStatus, RoomType, Session, Shift, StaffMember, StaffRole, StaffStatus, StudentProfile, StudentStatus, SubscriptionPlan, User,
   UserPreferences, VisitorRequest,
 } from '@/types/domain';
@@ -262,6 +262,30 @@ export interface ISettingsService {
   planUsage(): Promise<PlanUsage>;
   changePlan(planId: ID): Promise<PlanUsage>;
 }
+export interface PayoutAccountInput {
+  label: string;
+  businessType: PayoutBusinessType;
+  legalName: string;
+  contactName: string;
+  email: string;
+  phone: string;
+  /** Owner's PAN for an individual or sole proprietor; the business PAN otherwise. Sent to the provider, never stored. */
+  pan: string;
+  gstin: string;
+  address: { street: string; city: string; state: string; pincode: string };
+  bank: { holderName: string; accountNumber: string; ifsc: string };
+  acceptTerms: boolean;
+}
+export interface IPayoutService {
+  list(): Promise<PayoutAccount[]>;
+  create(input: PayoutAccountInput): Promise<PayoutAccount>;
+  /** Finish a draft, or fix an account the provider sent back. */
+  resubmit(id: ID, input: PayoutAccountInput): Promise<PayoutAccount>;
+  rename(id: ID, label: string): Promise<PayoutAccount>;
+  remove(id: ID): Promise<void>;
+  /** Which account a hostel's online rent goes to; null turns online rent off for it. */
+  assign(propertyId: ID, payoutAccountId: ID | null): Promise<void>;
+}
 export interface ISearchService { search(query: string): Promise<SearchResult[]> }
 export interface IEmergencyService {
   list(filters?: { status?: EmergencyAlertView['status'] }): Promise<EmergencyAlertView[]>;
@@ -276,5 +300,5 @@ export interface Services {
   complaints: IComplaintService; leave: ILeaveService; visitors: IVisitorService; maintenance: IMaintenanceService;
   inventory: IInventoryService; announcements: IAnnouncementService; events: IEventService; staff: IStaffService;
   feedback: IFeedbackService; documents: IDocumentService; notifications: INotificationService; activity: IActivityService;
-  analytics: IAnalyticsService; settings: ISettingsService; search: ISearchService; emergency: IEmergencyService; uploads: IUploadService;
+  analytics: IAnalyticsService; settings: ISettingsService; payouts: IPayoutService; search: ISearchService; emergency: IEmergencyService; uploads: IUploadService;
 }

@@ -120,6 +120,32 @@ export interface Property {
   imageVariant: number;
 }
 
+// ── Payout accounts: where online rent is paid out ───────────────────────────
+export type PayoutBusinessType =
+  | 'individual' | 'proprietorship' | 'partnership' | 'llp' | 'private_limited' | 'public_limited' | 'trust' | 'society' | 'ngo';
+/** Only `active` accounts receive online rent. */
+export type PayoutKycStatus = 'draft' | 'submitted' | 'under_review' | 'needs_clarification' | 'active' | 'rejected' | 'suspended';
+
+/** An owner's bank account. The account number and PAN are never returned, only the last four digits. */
+export interface PayoutAccount {
+  id: ID;
+  label: string;
+  businessType: PayoutBusinessType;
+  legalName: string;
+  contactName: string;
+  email: string;
+  phone: string;
+  bankHolderName: string;
+  bankLast4: string;
+  ifsc: string;
+  kycStatus: PayoutKycStatus;
+  /** What the payment provider needs corrected, or why registration did not finish. */
+  kycNote?: string;
+  /** Hostels whose online rent goes to this account. */
+  propertyIds: ID[];
+  createdAt: string;
+}
+
 export type RoomType = 'single' | 'double' | 'triple' | 'quad';
 export type RoomStatus = 'active' | 'maintenance';
 

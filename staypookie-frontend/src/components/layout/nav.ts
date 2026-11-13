@@ -1,7 +1,7 @@
 import type { LucideIcon } from 'lucide-react';
 import {
   Activity, BarChart3, BedDouble, Boxes, Building2, CalendarDays, ClipboardList, CreditCard, DoorOpen, FileText, Gauge,
-  Home, IndianRupee, LifeBuoy, Megaphone, MessageSquareWarning, Settings, Siren, Sparkles, Star, UserRound, Users, Wrench,
+  Home, IndianRupee, Landmark, LifeBuoy, Megaphone, MessageSquareWarning, Settings, Siren, Sparkles, Star, UserRound, Users, Wrench,
 } from 'lucide-react';
 import type { Role } from '@/types/domain';
 
@@ -25,6 +25,7 @@ export const NAV: Record<Role, NavGroup[]> = {
       { label: 'Inventory', to: '/owner/inventory', icon: Boxes, badge: 'lowStock' },
     ] },
     { heading: 'Account', items: [
+      { label: 'Payouts', to: '/owner/payouts', icon: Landmark },
       { label: 'Plans', to: '/owner/plans', icon: Sparkles },
       { label: 'Settings', to: '/owner/settings', icon: Settings },
     ] },

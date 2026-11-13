@@ -3,6 +3,7 @@ import { httpAuthService, httpPaymentService } from './http/auth-and-payments';
 import { httpPropertyService, httpRoomService, httpStudentService } from './http/spine';
 import { httpActivityService, httpNotificationService } from './http/misc';
 import { httpAnalyticsService } from './http/analytics';
+import { httpPayoutService } from './http/payouts';
 import {
   httpAnnouncementService, httpComplaintService, httpDocumentService, httpEmergencyService, httpEventService, httpFeedbackService,
   httpInventoryService, httpLeaveService, httpMaintenanceService, httpSearchService, httpSettingsService, httpStaffService,
@@ -39,6 +40,7 @@ export const services: Services = {
   feedback: httpFeedbackService,
   documents: httpDocumentService,
   settings: httpSettingsService,
+  payouts: httpPayoutService,
   search: httpSearchService,
   emergency: httpEmergencyService,
   uploads: httpUploadService,

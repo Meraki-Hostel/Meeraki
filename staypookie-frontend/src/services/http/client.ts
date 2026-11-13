@@ -100,6 +100,7 @@ export const http = {
   get: <T>(path: string, params?: object, auth = true) => request<T>('GET', path + qs(params), undefined, auth),
   post: <T>(path: string, body?: unknown, auth = true) => request<T>('POST', path, body, auth),
   patch: <T>(path: string, body?: unknown, auth = true) => request<T>('PATCH', path, body, auth),
+  put: <T>(path: string, body?: unknown, auth = true) => request<T>('PUT', path, body, auth),
   del: <T>(path: string, auth = true) => request<T>('DELETE', path, undefined, auth),
   blob,
 };

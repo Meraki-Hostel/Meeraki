@@ -41,6 +41,7 @@ Import alias: `@/` → `src/`.
 ## Payments
 
 - Online rent payment goes through Razorpay Checkout (`src/lib/razorpay.ts`), used from the student rent page. The flow: `payments.payNow()` creates a gateway order, Checkout collects the payment, then the browser calls `/payments/verify` — the balance only updates once the server has confirmed it (via `/payments/verify` or the webhook), never on the client's say-so.
+- Online rent is paid out to the hostel's payout account (owner page `/owner/payouts`, `services.payouts`). A hostel with no verified account answers pay-now with `NOT_CONFIGURED`, same as `disabled`.
 - If the backend's `PAYMENT_MODE` is `disabled`, pay-now answers `NOT_CONFIGURED` and the UI should say online payment isn't set up yet, not fail silently.
 
 ## Adding a backend-backed module

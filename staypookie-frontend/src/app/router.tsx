@@ -21,7 +21,7 @@ const O = {
   Dashboard: lazyNamed(owner, 'OwnerDashboard'), Properties: lazyNamed(owner, 'PropertiesPage'), PropertyNew: lazyNamed(owner, 'PropertyNewPage'),
   PropertyDetail: lazyNamed(owner, 'PropertyDetailPage'), Analytics: lazyNamed(owner, 'AnalyticsPage'), Finance: lazyNamed(owner, 'FinancePage'),
   Staff: lazyNamed(owner, 'OwnerStaffPage'), Complaints: lazyNamed(owner, 'OwnerComplaintsPage'), Events: lazyNamed(owner, 'OwnerEventsPage'),
-  Inventory: lazyNamed(owner, 'OwnerInventoryPage'), Plans: lazyNamed(owner, 'PlansPage'), Settings: lazyNamed(owner, 'SettingsPage'),
+  Inventory: lazyNamed(owner, 'OwnerInventoryPage'), Plans: lazyNamed(owner, 'PlansPage'), Payouts: lazyNamed(owner, 'PayoutAccountsPage'), Settings: lazyNamed(owner, 'SettingsPage'),
 };
 const M = {
   Dashboard: lazyNamed(manager, 'ManagerDashboard'), Rooms: lazyNamed(manager, 'RoomsPage'), Students: lazyNamed(manager, 'StudentsPage'),
@@ -83,6 +83,7 @@ export function AppRoutes() {
         <Route path="complaints" element={gated('complaints', <O.Complaints />)} />
         <Route path="events" element={gated('events', <O.Events />)} />
         <Route path="inventory" element={gated('inventory', <O.Inventory />)} />
+        <Route path="payouts" element={gated('payouts', <O.Payouts />)} />
         <Route path="plans" element={gated('plans', <O.Plans />)} />
         <Route path="settings" element={gated('settings', <O.Settings />)} />
         <Route path="*" element={<NotFoundPage />} />

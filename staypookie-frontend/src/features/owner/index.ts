@@ -10,6 +10,7 @@ export { PropertyDetailPage } from './PropertyDetailPage';
 export { AnalyticsPage } from './AnalyticsPage';
 export { FinancePage } from './FinancePage';
 export { PlansPage } from './PlansPage';
+export { PayoutAccountsPage } from './PayoutAccountsPage';
 export { SettingsPage } from './SettingsPage';
 export const OwnerStaffPage = () => createElement(StaffBoard, { scope: 'owner' });
 export const OwnerComplaintsPage = () => createElement(ComplaintsBoard, { scope: 'owner' });

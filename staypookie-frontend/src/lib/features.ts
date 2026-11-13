@@ -13,6 +13,7 @@ export const FEATURE_LABEL = {
   inventory: 'Inventory',
   leave: 'Leave',
   maintenance: 'Maintenance',
+  payouts: 'Payout accounts',
   plans: 'Plans',
   search: 'Search',
   settings: 'Settings',
@@ -28,7 +29,7 @@ export const isAvailable = (f: Feature): boolean => AVAILABLE.has(f);
 /** Route → module, for hiding navigation entries and gating their URLs. */
 export const ROUTE_FEATURE: Record<string, Feature> = {
   '/owner/analytics': 'analytics', '/owner/staff': 'staff', '/owner/complaints': 'complaints', '/owner/events': 'events',
-  '/owner/inventory': 'inventory', '/owner/plans': 'plans', '/owner/settings': 'settings',
+  '/owner/inventory': 'inventory', '/owner/payouts': 'payouts', '/owner/plans': 'plans', '/owner/settings': 'settings',
   '/manager/complaints': 'complaints', '/manager/leave': 'leave', '/manager/visitors': 'visitors', '/manager/maintenance': 'maintenance',
   '/manager/inventory': 'inventory', '/manager/staff': 'staff', '/manager/announcements': 'announcements', '/manager/events': 'events',
   '/manager/feedback': 'feedback',
