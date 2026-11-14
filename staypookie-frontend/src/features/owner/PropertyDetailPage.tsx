@@ -22,6 +22,7 @@ import { isAvailable } from '@/lib/features';
 const HAS_STAFF = isAvailable('staff');
 import { cn } from '@/lib/cn';
 import { EditPropertyModal, PropertyActions } from './PropertiesPages';
+import { PropertyRoomsTab } from './PropertyRoomsTab';
 
 type Tab = 'overview' | 'rooms' | 'residents' | 'finance' | 'activity';
 
@@ -113,30 +114,7 @@ export function PropertyDetailPage() {
         </TabPanel>
       )}
 
-      {tab === 'rooms' && (
-        <TabPanel>
-          {!rooms.data ? <Skeleton className="h-64" /> : rooms.data.length === 0 ? (
-            <Card className="p-8 text-center text-sm text-dust">No rooms yet. The property manager adds rooms from <strong>Rooms &amp; beds</strong>.</Card>
-          ) : (
-            <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-4">
-              {rooms.data.map((r) => (
-                <Card key={r.id} className="p-4">
-                  <div className="flex items-baseline justify-between"><h3 className="text-lg font-semibold">Room {r.number}</h3><span className="text-xs text-dust">Floor {r.floor}</span></div>
-                  <p className="text-xs text-dust">{sentenceCase(r.type)} · {formatINR(r.rent)}{r.ac ? ' · AC' : ''}</p>
-                  <ul className="mt-3 space-y-1.5">
-                    {r.beds.map((b) => (
-                      <li key={b.id} className="flex items-center justify-between gap-2 text-sm">
-                        <span className="text-bark">Bed {b.label}</span>
-                        <span className={cn('truncate text-right', b.status !== 'occupied' && 'text-dust')}>{b.status === 'occupied' ? b.studentName : <StatusBadge kind="bed" value={b.status} />}</span>
-                      </li>
-                    ))}
-                  </ul>
-                </Card>
-              ))}
-            </div>
-          )}
-        </TabPanel>
-      )}
+      {tab === 'rooms' && <TabPanel><PropertyRoomsTab rooms={rooms.data} /></TabPanel>}
 
       {tab === 'residents' && (
         <TabPanel><Card className="p-4"><DataTable caption={`Residents of ${p.name}`} columns={studentCols} rows={students.data} loading={students.loading} rowKey={(r) => r.id} /></Card>
